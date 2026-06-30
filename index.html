@@ -1,0 +1,1292 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Replik — Text lernen</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Courier+Prime:ital,wght@0,400;0,700;1,400&family=Inter:wght@400;500;600&display=swap');
+
+  :root {
+    --stage: #1A1816;
+    --stage-2: #242019;
+    --stage-3: #2E2922;
+    --paper: #F0EAD8;
+    --paper-dim: #DDD5BD;
+    --spot: #D89A4E;
+    --spot-dim: #8A6736;
+    --spot-bright: #F0B868;
+    --muted: #9c958a;
+    --line: rgba(240,234,216,0.12);
+    --line-strong: rgba(240,234,216,0.22);
+    --err: #C4503D;
+    --ok: #78A66C;
+  }
+
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; }
+
+  body {
+    background: var(--stage);
+    color: var(--paper);
+    font-family: 'Inter', sans-serif;
+    min-height: 100vh;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  .app {
+    max-width: 480px;
+    margin: 0 auto;
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    position: relative;
+  }
+
+  .topbar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 20px 24px 16px;
+    border-bottom: 1px solid var(--line);
+  }
+  .wordmark { font-family: 'Courier Prime', monospace; font-size: 18px; }
+  .wordmark span { color: var(--spot); }
+  .step-indicator { font-size: 12px; color: var(--muted); letter-spacing: 0.04em; }
+
+  .screen {
+    flex: 1;
+    padding: 32px 24px 110px;
+    display: none;
+    animation: fade 0.35s ease;
+  }
+  .screen.active { display: flex; flex-direction: column; }
+
+  @keyframes fade {
+    from { opacity: 0; transform: translateY(6px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+
+  h1 { font-family: 'Courier Prime', monospace; font-size: 24px; font-weight: 700; margin: 0 0 8px; line-height: 1.3; }
+  .stage-direction {
+    font-family: 'Courier Prime', monospace;
+    font-style: italic;
+    color: var(--muted);
+    font-size: 14px;
+    margin: 0 0 24px;
+  }
+  .stage-direction::before { content: "( "; }
+  .stage-direction::after { content: " )"; }
+
+  label { display: block; font-size: 12px; font-weight: 600; margin-bottom: 6px; color: var(--paper-dim); letter-spacing: 0.02em; }
+  input[type="password"], input[type="text"] {
+    width: 100%;
+    background: var(--stage-2);
+    border: 1px solid var(--line-strong);
+    color: var(--paper);
+    padding: 12px 14px;
+    border-radius: 4px;
+    font-size: 14px;
+    font-family: 'Courier Prime', monospace;
+    margin-bottom: 6px;
+  }
+  input:focus { outline: none; border-color: var(--spot); }
+  .field-hint { font-size: 12px; color: var(--muted); margin-bottom: 22px; line-height: 1.5; }
+
+  .dropzone {
+    border: 1.5px dashed var(--line-strong);
+    border-radius: 4px;
+    padding: 40px 20px;
+    text-align: center;
+    cursor: pointer;
+    transition: border-color 0.2s, background 0.2s;
+  }
+  .dropzone:hover, .dropzone.has-file { border-color: var(--spot); background: rgba(216,154,78,0.06); }
+  .dropzone .label-main { font-size: 15px; margin-bottom: 4px; }
+  .dropzone .label-sub { font-size: 13px; color: var(--muted); }
+  .dropzone .file-name { font-family: 'Courier Prime', monospace; font-size: 14px; margin-top: 4px; }
+  #fileInput { display: none; }
+
+  .status-line {
+    font-size: 13px;
+    color: var(--muted);
+    margin-top: 16px;
+    min-height: 18px;
+    white-space: pre-wrap;
+    font-family: 'Inter', sans-serif;
+  }
+  .status-line.error { color: var(--err); font-family: monospace; font-size: 11px; }
+  .status-line.success { color: var(--ok); }
+
+  .role-list { display: flex; flex-direction: column; gap: 10px; margin-top: 4px; }
+  .role-card {
+    border: 1px solid var(--line-strong);
+    border-radius: 4px;
+    padding: 16px 18px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    transition: border-color 0.2s, background 0.2s;
+  }
+  .role-card:hover { border-color: var(--spot-dim); }
+  .role-card.selected { border-color: var(--spot); background: rgba(216,154,78,0.08); }
+  .role-card .role-name { font-family: 'Courier Prime', monospace; font-weight: 700; font-size: 16px; letter-spacing: 0.02em; }
+  .role-card .role-meta { font-size: 12px; color: var(--muted); margin-top: 3px; }
+  .role-check {
+    width: 18px; height: 18px;
+    border: 1.5px solid var(--paper-dim);
+    border-radius: 4px;
+    flex-shrink: 0;
+    position: relative;
+  }
+  .role-card.selected .role-check { border-color: var(--spot); background: var(--spot); }
+  .role-card.selected .role-check::after {
+    content: '';
+    position: absolute;
+    top: 4px; left: 3px;
+    width: 9px; height: 5px;
+    border-left: 1.5px solid var(--stage);
+    border-bottom: 1.5px solid var(--stage);
+    transform: rotate(-45deg);
+  }
+
+  .scene-meta {
+    background: var(--stage-2);
+    border: 1px solid var(--line);
+    border-radius: 4px;
+    padding: 12px 16px;
+    margin-bottom: 18px;
+    font-size: 12px;
+    color: var(--muted);
+    font-family: 'Courier Prime', monospace;
+  }
+
+  .cta-bar {
+    position: absolute;
+    bottom: 0; left: 0; right: 0;
+    padding: 16px 24px 24px;
+    background: linear-gradient(to top, var(--stage) 65%, transparent);
+  }
+  .btn-primary {
+    width: 100%;
+    background: var(--spot);
+    color: var(--stage);
+    border: none;
+    border-radius: 4px;
+    padding: 15px;
+    font-size: 15px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: background 0.2s, opacity 0.2s;
+  }
+  .btn-primary:hover:not(:disabled) { background: var(--spot-bright); }
+  .btn-primary:disabled { opacity: 0.35; cursor: not-allowed; }
+  .btn-text {
+    width: 100%;
+    background: none;
+    border: none;
+    color: var(--muted);
+    font-size: 13px;
+    padding: 10px;
+    margin-top: 4px;
+    cursor: pointer;
+    text-align: center;
+  }
+  .btn-text:hover { color: var(--paper); }
+
+  .spinner {
+    display: inline-block;
+    width: 14px; height: 14px;
+    border: 2px solid var(--line-strong);
+    border-top-color: var(--spot);
+    border-radius: 50%;
+    animation: spin 0.7s linear infinite;
+    vertical-align: middle;
+    margin-right: 8px;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  .placeholder-note {
+    margin-top: auto;
+    background: var(--stage-2);
+    border: 1px dashed var(--line-strong);
+    border-radius: 4px;
+    padding: 16px;
+    font-size: 13px;
+    color: var(--muted);
+    line-height: 1.6;
+  }
+
+  .mode-list { display: flex; flex-direction: column; gap: 12px; }
+  .mode-card {
+    border: 1px solid var(--line-strong);
+    border-radius: 6px;
+    padding: 16px 18px;
+    cursor: pointer;
+    transition: border-color 0.2s, background 0.2s;
+  }
+  .mode-card:hover { border-color: var(--spot-dim); }
+  .mode-card.selected { border-color: var(--spot); background: rgba(216,154,78,0.08); }
+  .mode-card .mode-title {
+    font-family: 'Courier Prime', monospace;
+    font-weight: 700;
+    color: var(--spot);
+    font-size: 15px;
+    margin-bottom: 6px;
+  }
+  .mode-card .mode-desc { font-size: 13px; line-height: 1.5; color: var(--paper-dim); }
+
+  .practice-stage {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    text-align: center;
+    gap: 24px;
+  }
+  .line-block { padding: 0 8px; }
+  .line-role {
+    font-family: 'Courier Prime', monospace;
+    font-size: 12px;
+    letter-spacing: 0.1em;
+    color: var(--muted);
+    margin-bottom: 12px;
+  }
+  .line-text {
+    font-family: 'Courier Prime', monospace;
+    font-size: 18px;
+    line-height: 1.6;
+    color: var(--paper);
+  }
+  .practice-controls {
+    display: flex;
+    gap: 10px;
+    justify-content: center;
+  }
+  .ctrl-btn {
+    background: var(--stage-2);
+    border: 1px solid var(--line-strong);
+    color: var(--paper-dim);
+    border-radius: 4px;
+    padding: 12px 16px;
+    font-size: 13px;
+    cursor: pointer;
+  }
+  .ctrl-btn:hover:not(:disabled) { border-color: var(--spot-dim); }
+  .ctrl-btn:disabled { opacity: 0.3; cursor: not-allowed; }
+  .ctrl-btn.primary { background: var(--spot); color: var(--stage); border: none; font-weight: 600; flex: 1.4; }
+  .ctrl-btn.primary:hover:not(:disabled) { background: var(--spot-bright); }
+  .progress-label { font-size: 12px; color: var(--muted); }
+
+  .select-group { margin-bottom: 26px; }
+  .select-group-label {
+    font-family: 'Courier Prime', monospace;
+    font-size: 12px;
+    letter-spacing: 0.08em;
+    color: var(--muted);
+    margin-bottom: 10px;
+  }
+  .chip-list { display: flex; flex-wrap: wrap; gap: 8px; }
+  .chip {
+    border: 1px solid var(--line-strong);
+    border-radius: 20px;
+    padding: 8px 16px;
+    font-size: 13px;
+    cursor: pointer;
+    transition: border-color 0.2s, background 0.2s;
+    color: var(--paper-dim);
+  }
+  .chip:hover { border-color: var(--spot-dim); }
+  .chip.selected { border-color: var(--spot); background: rgba(216,154,78,0.12); color: var(--paper); }
+
+  .toggle-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 14px 0;
+    border-top: 1px solid var(--line);
+  }
+  .toggle-title { font-size: 14px; }
+  .toggle-sub { font-size: 12px; color: var(--muted); margin-top: 2px; }
+  .switch {
+    width: 44px; height: 26px;
+    background: var(--stage-3);
+    border: 1px solid var(--line-strong);
+    border-radius: 14px;
+    position: relative;
+    cursor: pointer;
+    flex-shrink: 0;
+    transition: background 0.2s;
+  }
+  .switch.on { background: var(--spot-dim); }
+  .switch-knob {
+    width: 20px; height: 20px;
+    background: var(--paper-dim);
+    border-radius: 50%;
+    position: absolute;
+    top: 2px; left: 2px;
+    transition: left 0.2s, background 0.2s;
+  }
+  .switch.on .switch-knob { left: 21px; background: var(--spot-bright); }
+
+  .feedback-pill {
+    display: none;
+    margin: 16px auto 0;
+    padding: 8px 18px;
+    border-radius: 20px;
+    font-size: 13px;
+    font-weight: 600;
+    width: fit-content;
+  }
+  .feedback-pill.show { display: block; }
+  .feedback-pill.correct { background: rgba(120,166,108,0.18); color: var(--ok); }
+  .feedback-pill.wrong { background: rgba(196,80,61,0.18); color: var(--err); }
+
+  .reveal-btn {
+    display: none;
+    margin: 14px auto 0;
+    background: none;
+    border: none;
+    color: var(--muted);
+    font-size: 12px;
+    text-decoration: underline;
+    text-decoration-color: rgba(156,149,138,0.4);
+    cursor: pointer;
+  }
+
+  .mic-indicator {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    font-size: 12px;
+    color: var(--err);
+    margin-top: 16px;
+  }
+  .mic-dot {
+    width: 9px; height: 9px;
+    border-radius: 50%;
+    background: var(--err);
+    animation: micPulse 1s ease-in-out infinite;
+  }
+  @keyframes micPulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.3; } }
+
+  input[type="range"] {
+    width: 100%;
+    margin-top: 6px;
+    accent-color: var(--spot);
+  }
+
+  .overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,0.6);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 100;
+    padding: 24px;
+  }
+  .overlay-card {
+    background: var(--stage-2);
+    border: 1px solid var(--line-strong);
+    border-radius: 10px;
+    padding: 24px;
+    max-width: 340px;
+    width: 100%;
+  }
+  .overlay-title { font-family: 'Courier Prime', monospace; font-weight: 700; font-size: 16px; margin-bottom: 6px; }
+  .overlay-text { font-size: 13px; color: var(--muted); margin-bottom: 18px; }
+  .overlay-btn {
+    width: 100%;
+    background: var(--stage-3);
+    border: 1px solid var(--line-strong);
+    color: var(--paper);
+    border-radius: 4px;
+    padding: 12px;
+    font-size: 14px;
+    cursor: pointer;
+    margin-bottom: 8px;
+  }
+  .overlay-btn:hover { border-color: var(--spot); }
+</style>
+</head>
+<body>
+<h2 style="position:absolute; width:1px; height:1px; overflow:hidden;">Replik App: PDF-Skript hochladen, Rollen erkennen lassen, mehrere Rollen auswählen.</h2>
+
+<div class="app">
+  <div class="topbar">
+    <div class="wordmark">re<span>plik</span></div>
+    <div class="step-indicator" id="stepIndicator">Schritt 1 / 5</div>
+  </div>
+
+  <!-- SCREEN 1: Upload -->
+  <div class="screen active" data-screen="1">
+    <h1>Skript hochladen</h1>
+    <p class="stage-direction">jedes Layout funktioniert</p>
+
+    <label>PDF-Skript</label>
+    <div class="dropzone" id="dropzone" onclick="document.getElementById('fileInput').click()">
+      <div class="label-main" id="dropLabel">Hier klicken zum Auswählen</div>
+      <div class="label-sub" id="dropSub">PDF-Datei</div>
+      <div class="file-name" id="fileName"></div>
+    </div>
+    <input type="file" id="fileInput" accept="application/pdf">
+
+    <div class="status-line" id="statusLine"></div>
+
+    <div class="cta-bar">
+      <button class="btn-primary" id="analyzeBtn" disabled onclick="analyze()">Analysieren</button>
+    </div>
+  </div>
+
+  <!-- SCREEN 2: Role select -->
+  <div class="screen" data-screen="2">
+    <h1>Wer bist du?</h1>
+    <p class="stage-direction" id="roleSubtitle">Rollen erkannt</p>
+
+    <div class="role-list" id="roleList"></div>
+
+    <div class="cta-bar">
+      <button class="btn-text" onclick="goTo(1)">Anderes Skript hochladen</button>
+      <button class="btn-primary" id="toStep3" disabled onclick="saveProjectAndContinue()">Weiter</button>
+    </div>
+  </div>
+
+  <!-- SCREEN 3: Scene/page select -->
+  <div class="screen" data-screen="3">
+    <h1>Was möchtest du üben?</h1>
+    <p class="stage-direction">Szenen und Seiten wählen</p>
+
+    <div class="select-group">
+      <div class="select-group-label">Szenen</div>
+      <div class="chip-list" id="sceneChipList"></div>
+    </div>
+
+    <div class="select-group">
+      <div class="select-group-label">Seiten</div>
+      <div class="chip-list" id="pageChipList"></div>
+    </div>
+
+    <div class="cta-bar">
+      <button class="btn-text" onclick="goTo(2)">Rollen ändern</button>
+      <button class="btn-primary" id="toStep4" disabled onclick="goTo(4)">Weiter</button>
+    </div>
+  </div>
+
+  <!-- SCREEN 4: Mode select -->
+  <div class="screen" data-screen="4">
+    <h1>Abfragemodus</h1>
+    <p class="stage-direction">wie viel soll vorgelesen werden</p>
+
+    <div class="mode-list">
+      <div class="mode-card" data-mode="full" onclick="selectMode('full')">
+        <div class="mode-title">Komplett</div>
+        <div class="mode-desc">Jede Zeile aller anderen Rollen wird vorgelesen — der ganze Dialog.</div>
+      </div>
+      <div class="mode-card" data-mode="cue" onclick="selectMode('cue')">
+        <div class="mode-title">Stichwort</div>
+        <div class="mode-desc">Nur der letzte Satz vor deiner Zeile wird vorgelesen.</div>
+      </div>
+      <div class="mode-card" data-mode="cue_full" onclick="selectMode('cue_full')">
+        <div class="mode-title">Ausführliches Stichwort</div>
+        <div class="mode-desc">Die ganze letzte Fremd-Zeile vor dir wird vorgelesen, nicht nur ihr letzter Satz.</div>
+      </div>
+    </div>
+
+    <div class="toggle-row">
+      <div class="toggle-label">
+        <div class="toggle-title">Eigenen Text anzeigen</div>
+        <div class="toggle-sub">Bei deinen Zeilen den Text mitlesen</div>
+      </div>
+      <div class="switch" id="toggleOwnText" onclick="toggleSwitch('toggleOwnText')"><div class="switch-knob"></div></div>
+    </div>
+
+    <div class="toggle-row">
+      <div class="toggle-label">
+        <div class="toggle-title">Regieanweisungen anzeigen</div>
+        <div class="toggle-sub">Szenenbeschreibungen zwischen den Zeilen</div>
+      </div>
+      <div class="switch" id="toggleDirections" onclick="toggleSwitch('toggleDirections')"><div class="switch-knob"></div></div>
+    </div>
+
+    <div class="toggle-row">
+      <div class="toggle-label">
+        <div class="toggle-title">Gegenpart automatisch vorlesen</div>
+        <div class="toggle-sub">Sonst musst du selbst auf "Vorlesen" tippen</div>
+      </div>
+      <div class="switch on" id="toggleAutoPlay" onclick="toggleSwitch('toggleAutoPlay')"><div class="switch-knob"></div></div>
+    </div>
+
+    <div class="select-group" style="margin-top:24px;">
+      <div class="select-group-label">Feedback bei deinen Zeilen</div>
+      <div class="mode-list">
+        <div class="mode-card" data-feedback="silent" onclick="selectFeedbackMode('silent')">
+          <div class="mode-title">Frei durch</div>
+          <div class="mode-desc">Kein Unterbrechen, am Ende eine Zusammenfassung.</div>
+        </div>
+        <div class="mode-card selected" data-feedback="retry" onclick="selectFeedbackMode('retry')">
+          <div class="mode-title">Nochmal</div>
+          <div class="mode-desc">Bei Fehler: "Falsch", zurück zum Stichwort.</div>
+        </div>
+        <div class="mode-card" data-feedback="continue" onclick="selectFeedbackMode('continue')">
+          <div class="mode-title">Weiter trotz Fehler</div>
+          <div class="mode-desc">Fehler wird markiert, aber es geht direkt weiter.</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="select-group">
+      <div class="select-group-label" id="strictnessLabel">Genauigkeit: ausgewogen</div>
+      <input type="range" id="strictnessSlider" min="0" max="100" value="50" oninput="updateStrictnessLabel(this.value)">
+    </div>
+
+    <div class="cta-bar">
+      <button class="btn-text" onclick="goTo(3)">Szenen ändern</button>
+      <button class="btn-primary" id="toStep5" disabled onclick="startPractice()">Probe beginnen</button>
+    </div>
+  </div>
+
+  <!-- SCREEN 5: Practice / Read-aloud -->
+  <div class="screen" data-screen="5">
+    <h1>Probe läuft</h1>
+    <p class="stage-direction" id="practiceModeLabel">Modus</p>
+
+    <div class="practice-stage">
+      <div class="line-block" id="lineBlock">
+        <div class="line-role" id="lineRole">—</div>
+        <div class="line-text" id="lineText">Bereit zum Start</div>
+        <div class="feedback-pill" id="feedbackPill"></div>
+        <button class="reveal-btn" id="revealBtn" onclick="revealOwnText()" style="display:none;">Text trotzdem zeigen</button>
+      </div>
+
+      <div class="mic-indicator" id="micIndicator" style="display:none;">
+        <div class="mic-dot"></div>
+        <span id="micStatusText">Höre zu…</span>
+      </div>
+
+      <div class="practice-controls">
+        <button class="ctrl-btn" id="prevBtn" onclick="stepLine(-1)">‹ Zurück</button>
+        <button class="ctrl-btn primary" id="playBtn" onclick="playCurrentLine()">▶ Vorlesen</button>
+        <button class="ctrl-btn" id="nextBtn" onclick="stepLine(1)">Weiter ›</button>
+      </div>
+      <div class="progress-label" id="progressLabel"></div>
+    </div>
+
+    <div class="cta-bar">
+      <button class="btn-text" onclick="goTo(4)">Modus ändern</button>
+    </div>
+  </div>
+
+  <!-- SCREEN 6: Summary (for "silent" feedback mode) -->
+  <div class="screen" data-screen="6">
+    <h1>Probe beendet</h1>
+    <p class="stage-direction">deine Zusammenfassung</p>
+
+    <div class="scene-meta" id="summaryStats"></div>
+
+    <div class="cta-bar">
+      <button class="btn-text" onclick="goTo(4)">Nochmal mit anderem Modus</button>
+      <button class="btn-primary" onclick="startPractice()">Szene wiederholen</button>
+    </div>
+  </div>
+
+</div>
+
+<!-- Overlay: nach 3 gescheiterten Versuchen -->
+<div class="overlay" id="stuckOverlay" style="display:none;">
+  <div class="overlay-card">
+    <div class="overlay-title">Drei Versuche ohne Treffer</div>
+    <div class="overlay-text">Wie möchtest du weitermachen?</div>
+    <button class="overlay-btn" onclick="stuckChoice('show')">Text zeigen</button>
+    <button class="overlay-btn" onclick="stuckChoice('retry')">Nochmal versuchen</button>
+    <button class="overlay-btn" onclick="stuckChoice('skip')">Weitergehen</button>
+  </div>
+</div>
+
+<script>
+pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+
+let selectedFile = null;
+let analysisResult = null;
+let selectedRoles = new Set();
+let selectedMode = null;
+let practiceIndex = 0; // Index in entries[], wo wir aktuell stehen
+
+function goTo(step) {
+  document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+  document.querySelector('.screen[data-screen="' + step + '"]').classList.add('active');
+  document.getElementById('stepIndicator').textContent = 'Schritt ' + step + ' / 5';
+}
+
+document.getElementById('fileInput').addEventListener('change', (e) => {
+  const file = e.target.files[0];
+  if (!file) return;
+  selectedFile = file;
+  document.getElementById('fileName').textContent = file.name;
+  document.getElementById('dropzone').classList.add('has-file');
+  document.getElementById('dropLabel').textContent = 'Datei ausgewählt:';
+  document.getElementById('dropSub').textContent = '';
+  checkReady();
+});
+
+function checkReady() {
+  document.getElementById('analyzeBtn').disabled = !selectedFile;
+}
+
+async function extractPdfText(file) {
+  const arrayBuffer = await file.arrayBuffer();
+  const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+  let fullText = '';
+  for (let i = 1; i <= pdf.numPages; i++) {
+    const page = await pdf.getPage(i);
+    const content = await page.getTextContent();
+    fullText += `\n[[SEITE ${i}]]\n` + content.items.map(item => item.str).join('\n') + '\n';
+  }
+  return fullText;
+}
+
+const SYSTEM_PROMPT = `Du bekommst den rohen, aus einem PDF extrahierten Text einer Theater- oder Drehbuchszene.
+Das Layout im Original-PDF kann beliebig unterschiedlich sein (klassisches Theaterskript mit "NAME: Text",
+Drehbuchformat mit Namen in eigener Zeile, Regieanweisungen in Klammern oder als Fließtext, etc).
+Es können auch mehrere Szenen in einem Dokument vorkommen.
+
+Der Text enthält Marker der Form [[SEITE n]] - das ist KEIN Teil des eigentlichen Skripts, sondern zeigt dir an, auf welcher PDF-Seite der nachfolgende Text steht. Nutze das, um jedem Eintrag im Feld "page" die richtige Seitenzahl zuzuordnen.
+
+Zusätzlich: Erkenne Szenenüberschriften (typischerweise Zeilen wie "23 INT. REDAKTIONSRAUM - TAG" oder "INT. SHOWROOM - TAG"). Jeder Eintrag bekommt im Feld "scene" eine kurze Szenenkennung (z.B. "23" oder die ersten paar Worte der Überschrift, falls keine Nummer vorhanden ist). Alle Einträge bis zur nächsten Szenenüberschrift gehören zur selben Szene.
+
+Deine Aufgabe: Zerlege den Text in eine geordnete Liste von Einträgen und rufe das Werkzeug "submit_scene" GENAU EINMAL mit dem vollständigen Ergebnis auf. Das Feld "entries" MUSS ein echtes Array sein (Liste von Objekten), NIEMALS ein String, der wie JSON aussieht.
+
+Jeder Eintrag ist entweder:
+- "dialogue": eine gesprochene Zeile mit ihrem Sprecher
+- "stage_direction": eine Regieanweisung / Szenenbeschreibung (kein Dialog) - dazu zählt auch die Szenenüberschrift selbst
+
+Regeln:
+- Erkenne den Sprecher auch wenn "(CONT'D)", ein Doppelpunkt direkt nach dem Namen, oder Groß-/Kleinschreibung variieren - normalisiere zu einem einheitlichen Namen pro Person (z.B. "PAULA:", "PAULA", "Paula" -> alle zu "PAULA").
+- Kurze Regieanweisungen in Klammern MITTEN in einer Sprechzeile (z.B. "(stammelt)", "(zerknirscht)") gehören NICHT als eigener Eintrag dazwischen, sondern bleiben Teil EINER zusammenhängenden Dialogzeile. Notiere sie zusätzlich im Feld "inline_directions" - die Regieanweisung selbst erscheint NICHT im gesprochenen "text".
+- Szenenüberschriften (z.B. "INT. ... - TAG") sind stage_direction.
+- Gib den gesprochenen Text wortgenau wieder, ändere NICHTS am Wortlaut (auch keine Dialekt-Schreibweisen normalisieren) - AUSSER bei Anführungszeichen: Jedes Anführungszeichen INNERHALB eines gesprochenen Textes schreibst du IMMER als « (öffnend) und » (schließend), niemals als " oder „ oder ".
+- Jeder Eintrag bekommt "page" (Zahl) und "scene" (kurzer String) gesetzt.`;
+
+const TOOL_DEFINITION = {
+  name: 'submit_scene',
+  description: 'Übermittelt die vollständig strukturierte Analyse der Szene(n).',
+  input_schema: {
+    type: 'object',
+    properties: {
+      scene_heading: { type: 'string', description: 'Erste Szenenüberschrift, falls vorhanden, sonst leerer String.' },
+      speakers_detected: { type: 'array', items: { type: 'string' }, description: 'Liste aller eindeutigen, normalisierten Sprechernamen.' },
+      entries: {
+        type: 'array',
+        description: 'Geordnete Liste aller Dialogzeilen und Regieanweisungen als ECHTES JSON-Array von Objekten. NIEMALS als String übergeben.',
+        items: {
+          type: 'object',
+          properties: {
+            type: { type: 'string', enum: ['dialogue', 'stage_direction'] },
+            speaker: { type: 'string', description: 'Nur bei type=dialogue gesetzt.' },
+            text: { type: 'string' },
+            page: { type: 'integer', description: 'PDF-Seitenzahl, aus dem [[SEITE n]]-Marker übernommen.' },
+            scene: { type: 'string', description: 'Kurze Szenenkennung, z.B. "23" oder Kurzform der Szenenüberschrift.' },
+            inline_directions: {
+              type: 'array',
+              items: {
+                type: 'object',
+                properties: { after_word_index: { type: 'integer' }, text: { type: 'string' } }
+              }
+            }
+          },
+          required: ['type', 'text']
+        }
+      }
+    },
+    required: ['speakers_detected', 'entries']
+  }
+};
+
+function smartFixQuotes(jsonLikeString) {
+  let result = '';
+  let i = 0;
+  while (i < jsonLikeString.length) {
+    const ch = jsonLikeString[i];
+    if (ch === '"') {
+      let k = result.length - 1;
+      while (k >= 0 && /\s/.test(result[k])) k--;
+      const prevChar = result[k];
+      const isStructuralStart = (prevChar === ':' || prevChar === ',' || prevChar === '[' || prevChar === '{' || k < 0);
+      if (isStructuralStart) {
+        result += '"';
+        i++;
+        let buffer = '';
+        while (i < jsonLikeString.length) {
+          if (jsonLikeString[i] === '\\') {
+            buffer += jsonLikeString[i] + (jsonLikeString[i + 1] || '');
+            i += 2;
+            continue;
+          }
+          if (jsonLikeString[i] === '"') {
+            let j = i + 1;
+            while (j < jsonLikeString.length && /\s/.test(jsonLikeString[j])) j++;
+            const nextChar = jsonLikeString[j];
+            const isStructuralEnd = (nextChar === ',' || nextChar === '}' || nextChar === ']' || nextChar === ':' || j >= jsonLikeString.length);
+            if (isStructuralEnd) break;
+            buffer += '\\"';
+            i++;
+            continue;
+          }
+          buffer += jsonLikeString[i];
+          i++;
+        }
+        result += buffer + '"';
+        i++;
+        continue;
+      }
+    }
+    result += ch;
+    i++;
+  }
+  return result;
+}
+
+function coerceEntries(parsed) {
+  if (typeof parsed.entries === 'string') {
+    try {
+      parsed.entries = JSON.parse(parsed.entries);
+    } catch (e1) {
+      parsed.entries = JSON.parse(smartFixQuotes(parsed.entries));
+    }
+  }
+  if (!Array.isArray(parsed.entries)) {
+    throw new Error('Unerwartetes Format für "entries".');
+  }
+  return parsed;
+}
+
+async function analyze() {
+  const statusEl = document.getElementById('statusLine');
+  const btn = document.getElementById('analyzeBtn');
+
+  btn.disabled = true;
+  statusEl.className = 'status-line';
+  statusEl.innerHTML = '<span class="spinner"></span>Lese PDF...';
+
+  try {
+    const rawText = await extractPdfText(selectedFile);
+    statusEl.innerHTML = '<span class="spinner"></span>Claude analysiert das Skript...';
+
+    const response = await fetch('/api/analyze', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        model: 'claude-sonnet-4-6',
+        max_tokens: 8192,
+        system: SYSTEM_PROMPT,
+        tools: [TOOL_DEFINITION],
+        tool_choice: { type: 'tool', name: 'submit_scene' },
+        messages: [{ role: 'user', content: `Hier ist der Rohtext:\n\n${rawText}` }]
+      })
+    });
+
+    if (!response.ok) {
+      const errText = await response.text();
+      throw new Error(`Server-Fehler ${response.status}: ${errText.slice(0, 300)}`);
+    }
+
+    const data = await response.json();
+    if (data.stop_reason === 'max_tokens') {
+      throw new Error('Antwort wurde abgeschnitten - das Skript ist vermutlich zu lang für einen Durchgang.');
+    }
+
+    const toolUseBlock = data.content.find(b => b.type === 'tool_use');
+    if (!toolUseBlock) throw new Error('Kein Analyse-Ergebnis erhalten.');
+
+    analysisResult = coerceEntries(toolUseBlock.input);
+    statusEl.className = 'status-line success';
+    statusEl.textContent = 'Fertig — ' + analysisResult.speakers_detected.length + ' Rollen erkannt.';
+
+    showRoleSelection();
+    setTimeout(() => goTo(2), 500);
+
+  } catch (err) {
+    statusEl.className = 'status-line error';
+    statusEl.textContent = 'Fehler: ' + err.message;
+    console.error(err);
+  } finally {
+    btn.disabled = false;
+  }
+}
+
+function showRoleSelection() {
+  const dialogueCounts = {};
+  analysisResult.entries.forEach(e => {
+    if (e.type === 'dialogue' && e.speaker) {
+      dialogueCounts[e.speaker] = (dialogueCounts[e.speaker] || 0) + 1;
+    }
+  });
+
+  document.getElementById('roleSubtitle').textContent = analysisResult.speakers_detected.length + ' Rollen erkannt — Mehrfachauswahl möglich';
+
+  const roleList = document.getElementById('roleList');
+  roleList.innerHTML = '';
+  selectedRoles = new Set();
+
+  analysisResult.speakers_detected.forEach(speaker => {
+    const card = document.createElement('div');
+    card.className = 'role-card';
+    card.innerHTML = `
+      <div>
+        <div class="role-name">${speaker}</div>
+        <div class="role-meta">${dialogueCounts[speaker] || 0} Zeilen</div>
+      </div>
+      <div class="role-check"></div>
+    `;
+    card.onclick = () => {
+      card.classList.toggle('selected');
+      if (card.classList.contains('selected')) selectedRoles.add(speaker);
+      else selectedRoles.delete(speaker);
+      document.getElementById('toStep3').disabled = selectedRoles.size === 0;
+    };
+    roleList.appendChild(card);
+  });
+}
+
+let selectedScenes = new Set();
+let selectedPages = new Set();
+let showOwnText = false;
+let showDirections = true;
+let feedbackMode = 'retry'; // 'silent' | 'retry' | 'continue'
+let autoPlayForeign = true;
+let strictness = 50; // 0 = lose, 100 = strikt
+let attemptCount = 0;
+let sessionStats = { correct: 0, wrong: 0, total: 0 };
+let recognition = null;
+
+function saveProjectAndContinue() {
+  const project = {
+    fileName: selectedFile.name,
+    sceneHeading: analysisResult.scene_heading,
+    speakers: analysisResult.speakers_detected,
+    yourRoles: Array.from(selectedRoles),
+    entries: analysisResult.entries,
+    savedAt: new Date().toISOString()
+  };
+  window.currentProject = project;
+  showSceneAndPageSelection();
+  goTo(3);
+}
+
+function showSceneAndPageSelection() {
+  const entries = window.currentProject.entries;
+
+  // Eindeutige Szenen und Seiten sammeln, in Reihenfolge des Vorkommens
+  const scenes = [];
+  const pages = [];
+  entries.forEach(e => {
+    if (e.scene && !scenes.includes(e.scene)) scenes.push(e.scene);
+    if (e.page && !pages.includes(e.page)) pages.push(e.page);
+  });
+  pages.sort((a, b) => a - b);
+
+  selectedScenes = new Set(scenes);
+  selectedPages = new Set(pages);
+
+  const sceneList = document.getElementById('sceneChipList');
+  sceneList.innerHTML = '';
+  if (scenes.length === 0) {
+    sceneList.innerHTML = '<span style="font-size:13px; color:var(--muted);">Keine Szenenmarkierung erkannt — alles wird einbezogen.</span>';
+  }
+  scenes.forEach(scene => {
+    const chip = document.createElement('div');
+    chip.className = 'chip selected';
+    chip.textContent = 'Szene ' + scene;
+    chip.onclick = () => toggleChip(chip, scene, selectedScenes);
+    sceneList.appendChild(chip);
+  });
+
+  const pageList = document.getElementById('pageChipList');
+  pageList.innerHTML = '';
+  if (pages.length === 0) {
+    pageList.innerHTML = '<span style="font-size:13px; color:var(--muted);">Keine Seitenzahlen erkannt.</span>';
+  }
+  pages.forEach(page => {
+    const chip = document.createElement('div');
+    chip.className = 'chip selected';
+    chip.textContent = 'Seite ' + page;
+    chip.onclick = () => toggleChip(chip, page, selectedPages);
+    pageList.appendChild(chip);
+  });
+
+  updateStep3Validity();
+}
+
+function toggleChip(chip, value, targetSet) {
+  chip.classList.toggle('selected');
+  if (chip.classList.contains('selected')) targetSet.add(value);
+  else targetSet.delete(value);
+  updateStep3Validity();
+}
+
+function updateStep3Validity() {
+  document.getElementById('toStep4').disabled = (selectedScenes.size === 0 && selectedPages.size === 0);
+}
+
+function toggleSwitch(id) {
+  const el = document.getElementById(id);
+  el.classList.toggle('on');
+  const isOn = el.classList.contains('on');
+  if (id === 'toggleOwnText') showOwnText = isOn;
+  if (id === 'toggleDirections') showDirections = isOn;
+  if (id === 'toggleAutoPlay') autoPlayForeign = isOn;
+}
+
+// Liefert nur die Einträge, die zu den gewählten Szenen/Seiten gehören.
+function getActiveEntries() {
+  const filtered = window.currentProject.entries.filter(e => {
+    const sceneOk = !e.scene || selectedScenes.has(e.scene);
+    const pageOk = !e.page || selectedPages.has(e.page);
+    return sceneOk && pageOk;
+  });
+
+  if (showDirections) return filtered;
+
+  // Regieanweisungen sind ausgeblendet: zwei Dialogzeilen DERSELBEN Person,
+  // die nur durch (eine oder mehrere) Regieanweisungen getrennt sind, werden
+  // zu einer einzigen zusammenhängenden Zeile verschmolzen.
+  const merged = [];
+  for (const entry of filtered) {
+    if (entry.type === 'stage_direction') continue; // wird ohnehin nicht angezeigt
+
+    const prev = merged[merged.length - 1];
+    if (prev && prev.type === 'dialogue' && prev.speaker === entry.speaker) {
+      prev.text = prev.text + ' ' + entry.text;
+      // inline_directions der Folgezeile mit anhängen, falls vorhanden
+      if (entry.inline_directions && entry.inline_directions.length) {
+        prev.inline_directions = (prev.inline_directions || []).concat(entry.inline_directions);
+      }
+    } else {
+      merged.push({ ...entry });
+    }
+  }
+  return merged;
+}
+
+function selectMode(mode) {
+  selectedMode = mode;
+  document.querySelectorAll('.mode-card[data-mode]').forEach(c => c.classList.remove('selected'));
+  document.querySelector(`.mode-card[data-mode="${mode}"]`).classList.add('selected');
+  document.getElementById('toStep5').disabled = false;
+}
+
+function selectFeedbackMode(mode) {
+  feedbackMode = mode;
+  document.querySelectorAll('.mode-card[data-feedback]').forEach(c => c.classList.remove('selected'));
+  document.querySelector(`.mode-card[data-feedback="${mode}"]`).classList.add('selected');
+}
+
+function updateStrictnessLabel(value) {
+  strictness = parseInt(value, 10);
+  let label;
+  if (strictness < 30) label = 'locker';
+  else if (strictness < 70) label = 'ausgewogen';
+  else label = 'strikt';
+  document.getElementById('strictnessLabel').textContent = 'Genauigkeit: ' + label;
+}
+
+function startPractice() {
+  practiceIndex = 0;
+  attemptCount = 0;
+  sessionStats = { correct: 0, wrong: 0, total: 0 };
+  const modeLabels = { full: 'Komplett', cue: 'Stichwort', cue_full: 'Ausführliches Stichwort' };
+  document.getElementById('practiceModeLabel').textContent = modeLabels[selectedMode];
+  goTo(5);
+  renderCurrentLine();
+}
+
+function isYourLine(entry) {
+  return entry.type === 'dialogue' && window.currentProject.yourRoles.includes(entry.speaker);
+}
+
+// Findet die anzuzeigenden "Vorlese-Häppchen" für die aktuelle Position,
+// abhängig vom gewählten Modus. Gibt eine Liste von {speaker, text} zurück,
+// die der Reihe nach vorgelesen werden, bis die nächste EIGENE Zeile erreicht ist.
+function getReadAloudQueue(fromIndex) {
+  const entries = getActiveEntries();
+  const foreignLines = []; // alle Fremd-Dialogzeilen bis zur nächsten eigenen Zeile
+  let i = fromIndex;
+  while (i < entries.length) {
+    const e = entries[i];
+    if (e.type === 'dialogue') {
+      if (isYourLine(e)) break;
+      foreignLines.push(e);
+    }
+    i++;
+  }
+  if (foreignLines.length === 0) return { queue: [], nextIndex: i };
+
+  if (selectedMode === 'full') {
+    return { queue: foreignLines.map(e => ({ speaker: e.speaker, text: e.text })), nextIndex: i };
+  }
+  // cue / cue_full: nur die letzte Fremd-Zeile vor der eigenen
+  const last = foreignLines[foreignLines.length - 1];
+  if (selectedMode === 'cue_full') {
+    return { queue: [{ speaker: last.speaker, text: last.text }], nextIndex: i };
+  }
+  // cue: nur der letzte Satz der letzten Fremd-Zeile
+  const sentences = last.text.match(/[^.!?]+[.!?]*/g) || [last.text];
+  const lastSentence = sentences[sentences.length - 1].trim();
+  return { queue: [{ speaker: last.speaker, text: lastSentence }], nextIndex: i };
+}
+
+function renderCurrentLine() {
+  const entries = getActiveEntries();
+  stopListening();
+  hideFeedback();
+  document.getElementById('revealBtn').style.display = 'none';
+
+  // Regieanweisungen überspringen, wenn der Toggle aus ist
+  while (practiceIndex < entries.length && entries[practiceIndex].type === 'stage_direction' && !showDirections) {
+    practiceIndex++;
+  }
+
+  if (practiceIndex >= entries.length) {
+    document.getElementById('lineRole').textContent = 'Ende';
+    document.getElementById('lineText').textContent = 'Szene zu Ende — gut gemacht.';
+    document.getElementById('playBtn').disabled = true;
+    document.getElementById('progressLabel').textContent = `Zeile ${entries.length} / ${entries.length}`;
+    if (feedbackMode === 'silent') showSummary();
+    return;
+  }
+
+  const entry = entries[practiceIndex];
+
+  if (entry.type === 'stage_direction') {
+    document.getElementById('lineRole').textContent = 'Regie';
+    document.getElementById('lineText').textContent = entry.text;
+    document.getElementById('playBtn').disabled = true;
+  } else if (isYourLine(entry)) {
+    attemptCount = 0;
+    document.getElementById('lineRole').textContent = entry.speaker + ' — DEINE ZEILE';
+    document.getElementById('lineText').textContent = showOwnText ? entry.text : '🎤 jetzt sprechen';
+    document.getElementById('playBtn').disabled = true;
+    if (!showOwnText) document.getElementById('revealBtn').style.display = 'block';
+    startListening(entry);
+  } else {
+    // Fremd-Zeile: entweder automatisch vorlesen, oder auf Knopfdruck warten
+    const { queue } = getReadAloudQueue(practiceIndex);
+    if (queue.length > 0) {
+      document.getElementById('lineRole').textContent = queue.map(q => q.speaker).join(' / ');
+      if (autoPlayForeign) {
+        document.getElementById('lineText').textContent = '🔊 wird vorgelesen…';
+        document.getElementById('playBtn').disabled = true;
+        playCurrentLine();
+      } else {
+        document.getElementById('lineText').textContent = '🔊 bereit zum Vorlesen';
+        document.getElementById('playBtn').disabled = false;
+      }
+    }
+  }
+
+  document.getElementById('progressLabel').textContent = `Zeile ${practiceIndex + 1} / ${entries.length}`;
+}
+
+function revealOwnText() {
+  const entry = getActiveEntries()[practiceIndex];
+  document.getElementById('lineText').textContent = entry.text;
+}
+
+function playCurrentLine() {
+  const { queue, nextIndex } = getReadAloudQueue(practiceIndex);
+  if (queue.length === 0) return;
+
+  document.getElementById('playBtn').disabled = true;
+  speakQueue(queue, 0, () => {
+    practiceIndex = nextIndex;
+    renderCurrentLine();
+  });
+}
+
+function speakQueue(queue, i, onDone) {
+  if (i >= queue.length) { onDone(); return; }
+  const utter = new SpeechSynthesisUtterance(queue[i].text);
+  utter.lang = 'de-DE';
+  utter.onend = () => speakQueue(queue, i + 1, onDone);
+  document.getElementById('lineText').textContent = '🔊 ' + queue[i].speaker + ': ' + queue[i].text;
+  speechSynthesis.speak(utter);
+}
+
+function stepLine(direction) {
+  const entries = getActiveEntries();
+  let newIndex = practiceIndex + direction;
+  newIndex = Math.max(0, Math.min(entries.length, newIndex));
+  practiceIndex = newIndex;
+  speechSynthesis.cancel();
+  stopListening();
+  renderCurrentLine();
+}
+
+// ---------- Mikrofon / Spracherkennung ----------
+
+const SpeechRecognitionAPI = window.SpeechRecognition || window.webkitSpeechRecognition;
+
+function startListening(expectedEntry) {
+  if (!SpeechRecognitionAPI) {
+    document.getElementById('micStatusText').textContent = 'Spracherkennung wird von diesem Browser nicht unterstützt — bitte Chrome verwenden, oder Text eintippen.';
+    document.getElementById('micIndicator').style.display = 'flex';
+    return;
+  }
+
+  recognition = new SpeechRecognitionAPI();
+  recognition.lang = 'de-DE';
+  recognition.interimResults = false;
+  recognition.maxAlternatives = 1;
+
+  document.getElementById('micIndicator').style.display = 'flex';
+  document.getElementById('micStatusText').textContent = 'Höre zu…';
+
+  recognition.onresult = (event) => {
+    const spoken = event.results[0][0].transcript;
+    handleSpokenResult(spoken, expectedEntry);
+  };
+
+  recognition.onerror = (event) => {
+    document.getElementById('micStatusText').textContent = 'Mikrofon-Fehler: ' + event.error + ' — nochmal versuchen oder Text eintippen.';
+  };
+
+  recognition.onend = () => {
+    document.getElementById('micIndicator').style.display = 'none';
+  };
+
+  try {
+    recognition.start();
+  } catch (e) {
+    console.error('Mikrofon konnte nicht gestartet werden:', e);
+  }
+}
+
+function stopListening() {
+  if (recognition) {
+    try { recognition.stop(); } catch (e) {}
+    recognition = null;
+  }
+  document.getElementById('micIndicator').style.display = 'none';
+}
+
+// Vergleicht den gesprochenen Text mit dem erwarteten Text, abhängig vom
+// Strenge-Regler (0 = lose, 100 = strikt). Gibt {isCorrect, similarity} zurück.
+function compareSpoken(spoken, expected) {
+  const normalize = (s) => s.toLowerCase()
+    .replace(/[.,!?;:„""«»\-]/g, '')
+    .replace(/\s+/g, ' ')
+    .trim();
+
+  const spokenNorm = normalize(spoken);
+  const expectedNorm = normalize(expected);
+
+  if (spokenNorm === expectedNorm) return { isCorrect: true, similarity: 1 };
+
+  const spokenWords = spokenNorm.split(' ').filter(Boolean);
+  const expectedWords = expectedNorm.split(' ').filter(Boolean);
+
+  const expectedSet = new Set(expectedWords);
+  const spokenSet = new Set(spokenWords);
+
+  // recall: wie viele erwartete Wörter wurden getroffen (Stichwörter da?)
+  let matchCount = 0;
+  expectedSet.forEach(w => { if (spokenSet.has(w)) matchCount++; });
+  const recall = expectedSet.size > 0 ? matchCount / expectedSet.size : 0;
+
+  // precision: wie viele gesprochene Wörter waren NICHT erwartet (Füllwörter/Fehler)
+  let extraCount = 0;
+  spokenSet.forEach(w => { if (!expectedSet.has(w)) extraCount++; });
+  const precision = spokenSet.size > 0 ? 1 - (extraCount / spokenSet.size) : 1;
+
+  // Bei "lose" zählt nur recall (Stichwörter getroffen, Füllwörter egal).
+  // Bei "strikt" fließt precision stark mit ein (keine überflüssigen Wörter).
+  const precisionWeight = strictness / 100;
+  const similarity = recall * (1 - precisionWeight) + Math.min(recall, precision) * precisionWeight;
+
+  const threshold = 0.4 + (strictness / 100) * 0.5; // 0.4 (lose) bis 0.9 (strikt)
+  return { isCorrect: similarity >= threshold, similarity };
+}
+
+function handleSpokenResult(spoken, expectedEntry) {
+  const result = compareSpoken(spoken, expectedEntry.text);
+  sessionStats.total++;
+
+  if (result.isCorrect) {
+    sessionStats.correct++;
+    attemptCount = 0;
+    showFeedback(true);
+    setTimeout(() => { practiceIndex++; renderCurrentLine(); }, 700);
+    return;
+  }
+
+  sessionStats.wrong++;
+  attemptCount++;
+
+  if (feedbackMode === 'silent') {
+    // Kein Unterbrechen, einfach weiter
+    practiceIndex++;
+    renderCurrentLine();
+    return;
+  }
+
+  if (feedbackMode === 'continue') {
+    showFeedback(false);
+    setTimeout(() => { practiceIndex++; renderCurrentLine(); }, 1100);
+    return;
+  }
+
+  // feedbackMode === 'retry'
+  showFeedback(false);
+  if (attemptCount >= 3) {
+    setTimeout(() => showStuckOverlay(), 600);
+  } else {
+    setTimeout(() => startListening(expectedEntry), 1000);
+  }
+}
+
+function showFeedback(isCorrect) {
+  const pill = document.getElementById('feedbackPill');
+  pill.className = 'feedback-pill show ' + (isCorrect ? 'correct' : 'wrong');
+  pill.textContent = isCorrect ? '✓ Richtig' : '✗ Nicht ganz';
+}
+
+function hideFeedback() {
+  document.getElementById('feedbackPill').className = 'feedback-pill';
+}
+
+function showStuckOverlay() {
+  stopListening();
+  document.getElementById('stuckOverlay').style.display = 'flex';
+}
+
+function stuckChoice(choice) {
+  document.getElementById('stuckOverlay').style.display = 'none';
+  attemptCount = 0;
+  if (choice === 'show') {
+    revealOwnText();
+    startListening(getActiveEntries()[practiceIndex]);
+  } else if (choice === 'retry') {
+    startListening(getActiveEntries()[practiceIndex]);
+  } else if (choice === 'skip') {
+    practiceIndex++;
+    renderCurrentLine();
+  }
+}
+
+function showSummary() {
+  goTo(6);
+  const s = sessionStats;
+  const pct = s.total > 0 ? Math.round((s.correct / s.total) * 100) : 0;
+  document.getElementById('summaryStats').innerHTML = `
+    Zeilen gesprochen: ${s.total}<br>
+    Richtig: ${s.correct}<br>
+    Abweichend: ${s.wrong}<br>
+    Treffer­quote: ${pct}%
+  `;
+}
+</script>
+</body>
+</html>
