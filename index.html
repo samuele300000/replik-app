@@ -650,22 +650,48 @@ function checkReady() {
   document.getElementById('analyzeBtn').disabled = !selectedFile;
 }
 
-async function extractPdfText(file) {
+// Extrahiert den Text seitenweise (statt als ein grosser String), damit wir
+// lange Skripte in mehreren API-Aufrufen (Chunks) analysieren können.
+async function extractPdfPages(file) {
   const arrayBuffer = await file.arrayBuffer();
   const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
-  let fullText = '';
+  const pages = [];
   for (let i = 1; i <= pdf.numPages; i++) {
     const page = await pdf.getPage(i);
     const content = await page.getTextContent();
-    fullText += `\n[[SEITE ${i}]]\n` + content.items.map(item => item.str).join('\n') + '\n';
+    const text = `\n[[SEITE ${i}]]\n` + content.items.map(item => item.str).join('\n') + '\n';
+    pages.push({ page: i, text });
   }
-  return fullText;
+  return pages;
 }
 
-const SYSTEM_PROMPT = `Du bekommst den rohen, aus einem PDF extrahierten Text einer Theater- oder Drehbuchszene.
+function buildChunkText(chunkPages) {
+  return chunkPages.map(p => p.text).join('');
+}
+
+function buildSystemPrompt(context) {
+  const { isChunk, knownSpeakers, knownScene, isFirstChunk, isLastChunk } = context || {};
+
+  let intro = `Du bekommst den rohen, aus einem PDF extrahierten Text einer Theater- oder Drehbuchszene.
 Das Layout im Original-PDF kann beliebig unterschiedlich sein (klassisches Theaterskript mit "NAME: Text",
 Drehbuchformat mit Namen in eigener Zeile, Regieanweisungen in Klammern oder als Fließtext, etc).
-Es können auch mehrere Szenen in einem Dokument vorkommen.
+Es können auch mehrere Szenen in einem Dokument vorkommen.`;
+
+  let chunkNote = '';
+  if (isChunk) {
+    chunkNote = `\n\nWICHTIG: Der Text, den du bekommst, ist NUR EIN AUSSCHNITT (Chunk) aus einem längeren Skript - das Skript wurde in mehrere Teile zerlegt, damit die Antwort nicht abgeschnitten wird. Analysiere NUR den Text, den du jetzt siehst, und rufe "submit_scene" trotzdem GENAU EINMAL für diesen Ausschnitt auf.`;
+    if (!isFirstChunk) {
+      chunkNote += ` Dieser Ausschnitt beginnt NICHT zwingend am Anfang einer Szene oder eines Satzes - er kann mitten in einem Dialog oder einer Regieanweisung starten. Setze das inhaltlich einfach so fort, wie es im Text vorliegt.`;
+    }
+    if (knownScene) {
+      chunkNote += `\n\nDie zuletzt laufende Szenenkennung war: "${knownScene}". Falls dieser Ausschnitt mitten in dieser Szene weitergeht (keine neue Szenenüberschrift am Anfang zu sehen), verwende im Feld "scene" weiterhin "${knownScene}", bis eine neue Szenenüberschrift im Text auftaucht.`;
+    }
+    if (knownSpeakers && knownSpeakers.length) {
+      chunkNote += `\n\nBereits in vorherigen Ausschnitten erkannte, normalisierte Sprechernamen: ${knownSpeakers.join(', ')}. Falls eine dieser Personen hier erneut spricht, schreibe den Namen EXAKT GLEICH (gleiche Gross-/Kleinschreibung), damit die Rollen über das ganze Skript hinweg konsistent bleiben.`;
+    }
+  }
+
+  return `${intro}${chunkNote}
 
 Der Text enthält Marker der Form [[SEITE n]] - das ist KEIN Teil des eigentlichen Skripts, sondern zeigt dir an, auf welcher PDF-Seite der nachfolgende Text steht. Nutze das, um jedem Eintrag im Feld "page" die richtige Seitenzahl zuzuordnen.
 
@@ -683,6 +709,7 @@ Regeln:
 - Szenenüberschriften (z.B. "INT. ... - TAG") sind stage_direction.
 - Gib den gesprochenen Text wortgenau wieder, ändere NICHTS am Wortlaut (auch keine Dialekt-Schreibweisen normalisieren) - AUSSER bei Anführungszeichen: Jedes Anführungszeichen INNERHALB eines gesprochenen Textes schreibst du IMMER als « (öffnend) und » (schließend), niemals als " oder „ oder ".
 - Jeder Eintrag bekommt "page" (Zahl) und "scene" (kurzer String) gesetzt.`;
+}
 
 const TOOL_DEFINITION = {
   name: 'submit_scene',
@@ -777,6 +804,117 @@ function coerceEntries(parsed) {
   return parsed;
 }
 
+// Ruft die Anthropic API für EINEN Text-Chunk auf und gibt die rohe Response zurück.
+async function callAnalyzeApi(chunkText, systemPrompt) {
+  const response = await fetch('/api/analyze', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      model: 'claude-sonnet-4-6',
+      max_tokens: 16000,
+      system: systemPrompt,
+      tools: [TOOL_DEFINITION],
+      tool_choice: { type: 'tool', name: 'submit_scene' },
+      messages: [{ role: 'user', content: `Hier ist der Rohtext:\n\n${chunkText}` }]
+    })
+  });
+
+  if (!response.ok) {
+    const errText = await response.text();
+    throw new Error(`Server-Fehler ${response.status}: ${errText.slice(0, 300)}`);
+  }
+  return response.json();
+}
+
+// Analysiert einen Seitenbereich (chunkPages). Falls die Antwort wegen max_tokens
+// abgeschnitten wird, wird der Bereich automatisch halbiert und beide Hälften
+// einzeln (rekursiv) analysiert - so kommt jedes Skript irgendwann durch,
+// egal wie dialogdicht/lang eine einzelne Passage ist.
+async function analyzeChunkWithRetry(chunkPages, knownSpeakers, knownScene, isFirstOverall, onStatus) {
+  const chunkText = buildChunkText(chunkPages);
+  const fromPage = chunkPages[0].page;
+  const toPage = chunkPages[chunkPages.length - 1].page;
+
+  onStatus(`Analysiere Seite ${fromPage}${toPage !== fromPage ? '–' + toPage : ''}...`);
+
+  const systemPrompt = buildSystemPrompt({
+    isChunk: true,
+    knownSpeakers: Array.from(knownSpeakers),
+    knownScene,
+    isFirstChunk: isFirstOverall
+  });
+
+  const data = await callAnalyzeApi(chunkText, systemPrompt);
+
+  if (data.stop_reason === 'max_tokens') {
+    if (chunkPages.length === 1) {
+      throw new Error(`Selbst Seite ${fromPage} allein erzeugt eine zu lange Antwort. Bitte PDF-Layout prüfen (evtl. sehr viel Text pro Seite).`);
+    }
+    onStatus(`Seite ${fromPage}–${toPage} ist zu dicht - teile sie auf...`);
+    const mid = Math.ceil(chunkPages.length / 2);
+    const firstHalf = await analyzeChunkWithRetry(chunkPages.slice(0, mid), knownSpeakers, knownScene, isFirstOverall, onStatus);
+
+    firstHalf.speakers_detected.forEach(s => knownSpeakers.add(s));
+    let sceneAfterFirst = knownScene;
+    if (firstHalf.entries.length) {
+      const lastEntry = firstHalf.entries[firstHalf.entries.length - 1];
+      if (lastEntry.scene) sceneAfterFirst = lastEntry.scene;
+    }
+
+    const secondHalf = await analyzeChunkWithRetry(chunkPages.slice(mid), knownSpeakers, sceneAfterFirst, false, onStatus);
+
+    return {
+      scene_heading: firstHalf.scene_heading || secondHalf.scene_heading,
+      speakers_detected: Array.from(new Set([...firstHalf.speakers_detected, ...secondHalf.speakers_detected])),
+      entries: [...firstHalf.entries, ...secondHalf.entries]
+    };
+  }
+
+  const toolUseBlock = data.content.find(b => b.type === 'tool_use');
+  if (!toolUseBlock) throw new Error(`Kein Analyse-Ergebnis für Seite ${fromPage}–${toPage} erhalten.`);
+
+  return coerceEntries(toolUseBlock.input);
+}
+
+// Zerlegt das ganze Skript in Seiten-Chunks (Startgrösse PAGES_PER_CHUNK) und
+// analysiert sie der Reihe nach, damit Sprecher-Namen und laufende Szene
+// über Chunk-Grenzen hinweg konsistent bleiben.
+async function analyzeScript(pages, onStatus) {
+  const PAGES_PER_CHUNK = 12;
+  const speakersSet = new Set();
+  let currentScene = '';
+  let sceneHeading = '';
+  const allEntries = [];
+
+  let idx = 0;
+  let chunkNumber = 0;
+  const totalChunks = Math.ceil(pages.length / PAGES_PER_CHUNK);
+
+  while (idx < pages.length) {
+    chunkNumber++;
+    const chunkPages = pages.slice(idx, idx + PAGES_PER_CHUNK);
+    onStatus(`Chunk ${chunkNumber} von ${totalChunks} (Seite ${chunkPages[0].page}–${chunkPages[chunkPages.length - 1].page})...`);
+
+    const result = await analyzeChunkWithRetry(chunkPages, speakersSet, currentScene, idx === 0, onStatus);
+
+    allEntries.push(...result.entries);
+    result.speakers_detected.forEach(s => speakersSet.add(s));
+    if (!sceneHeading && result.scene_heading) sceneHeading = result.scene_heading;
+    if (result.entries.length) {
+      const lastEntry = result.entries[result.entries.length - 1];
+      if (lastEntry.scene) currentScene = lastEntry.scene;
+    }
+
+    idx += chunkPages.length;
+  }
+
+  return {
+    scene_heading: sceneHeading,
+    speakers_detected: Array.from(speakersSet),
+    entries: allEntries
+  };
+}
+
 async function analyze() {
   const statusEl = document.getElementById('statusLine');
   const btn = document.getElementById('analyzeBtn');
@@ -785,37 +923,16 @@ async function analyze() {
   statusEl.className = 'status-line';
   statusEl.innerHTML = '<span class="spinner"></span>Lese PDF...';
 
+  const setStatus = (msg) => {
+    statusEl.innerHTML = '<span class="spinner"></span>' + msg;
+  };
+
   try {
-    const rawText = await extractPdfText(selectedFile);
-    statusEl.innerHTML = '<span class="spinner"></span>Claude analysiert das Skript...';
+    const pages = await extractPdfPages(selectedFile);
+    setStatus('Claude analysiert das Skript...');
 
-    const response = await fetch('/api/analyze', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        model: 'claude-sonnet-4-6',
-        max_tokens: 8192,
-        system: SYSTEM_PROMPT,
-        tools: [TOOL_DEFINITION],
-        tool_choice: { type: 'tool', name: 'submit_scene' },
-        messages: [{ role: 'user', content: `Hier ist der Rohtext:\n\n${rawText}` }]
-      })
-    });
+    analysisResult = await analyzeScript(pages, setStatus);
 
-    if (!response.ok) {
-      const errText = await response.text();
-      throw new Error(`Server-Fehler ${response.status}: ${errText.slice(0, 300)}`);
-    }
-
-    const data = await response.json();
-    if (data.stop_reason === 'max_tokens') {
-      throw new Error('Antwort wurde abgeschnitten - das Skript ist vermutlich zu lang für einen Durchgang.');
-    }
-
-    const toolUseBlock = data.content.find(b => b.type === 'tool_use');
-    if (!toolUseBlock) throw new Error('Kein Analyse-Ergebnis erhalten.');
-
-    analysisResult = coerceEntries(toolUseBlock.input);
     statusEl.className = 'status-line success';
     statusEl.textContent = 'Fertig — ' + analysisResult.speakers_detected.length + ' Rollen erkannt.';
 
