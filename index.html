@@ -425,7 +425,7 @@
   <!-- SCREEN 1: Upload -->
   <div class="screen active" data-screen="1">
     <h1>Skript hochladen</h1>
-    <p class="stage-direction">jedes Layout funktioniert</p>
+    <p class="stage-direction">PDF hochladen und loslegen</p>
 
     <label>PDF-Skript</label>
     <div class="dropzone" id="dropzone" onclick="document.getElementById('fileInput').click()">
@@ -438,6 +438,7 @@
     <div class="status-line" id="statusLine"></div>
 
     <div class="cta-bar">
+      <button class="btn-text" id="backToRolesBtn" style="display:none;" onclick="goTo(2)">Zurück zur Rollenauswahl (ohne neu zu analysieren)</button>
       <button class="btn-primary" id="analyzeBtn" disabled onclick="analyze()">Analysieren</button>
     </div>
   </div>
@@ -458,7 +459,7 @@
   <!-- SCREEN 3: Scene/page select -->
   <div class="screen" data-screen="3">
     <h1>Was möchtest du üben?</h1>
-    <p class="stage-direction">Szenen und Seiten wählen</p>
+    <p class="stage-direction">Szenen, Seiten und Startpunkt wählen</p>
 
     <div class="select-group">
       <div class="select-group-label">Szenen</div>
@@ -470,6 +471,13 @@
       <div class="chip-list" id="pageChipList"></div>
     </div>
 
+    <div class="select-group">
+      <div class="select-group-label">Startpunkt</div>
+      <select id="startPointSelect" style="width:100%; background:var(--stage-2); border:1px solid var(--line-strong); color:var(--paper); padding:10px 12px; border-radius:4px; font-size:14px; font-family:inherit;">
+        <option value="0">Von Anfang an</option>
+      </select>
+    </div>
+
     <div class="cta-bar">
       <button class="btn-text" onclick="goTo(2)">Rollen ändern</button>
       <button class="btn-primary" id="toStep4" disabled onclick="goTo(4)">Weiter</button>
@@ -478,8 +486,8 @@
 
   <!-- SCREEN 4: Mode select -->
   <div class="screen" data-screen="4">
-    <h1>Abfragemodus</h1>
-    <p class="stage-direction">wie viel soll vorgelesen werden</p>
+    <h1>Abfrageeinstellungen</h1>
+    <p class="stage-direction">Vorlese- und Feedback-Modus wählen</p>
 
     <div class="mode-list">
       <div class="mode-card" data-mode="full" onclick="selectMode('full')">
@@ -539,8 +547,14 @@
     </div>
 
     <div class="select-group">
-      <div class="select-group-label" id="strictnessLabel">Genauigkeit: ausgewogen</div>
-      <input type="range" id="strictnessSlider" min="0" max="100" value="50" oninput="updateStrictnessLabel(this.value)">
+      <div class="select-group-label" id="strictnessLabel">Genauigkeit: locker</div>
+      <input type="range" id="strictnessSlider" min="0" max="100" value="25" oninput="updateStrictnessLabel(this.value)">
+    </div>
+
+    <div class="select-group">
+      <div class="select-group-label" id="chunkLabel">Abfrageeinheit: 1 Satz (Dialog)</div>
+      <input type="range" id="chunkSlider" min="1" max="10" value="1" oninput="updateChunkLabel(this.value)">
+      <div style="font-size:12px; color:var(--muted); margin-top:6px;">1 = Zeile für Zeile (gut für Dialog) · 10 = ganze Blöcke (gut für Monologe)</div>
     </div>
 
     <div class="cta-bar">
@@ -617,7 +631,7 @@ let practiceIndex = 0; // Index in entries[], wo wir aktuell stehen
 
 function goTo(step) {
   document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
-  document.querySelector('.screen[data-screen="' + step + '"]').classList.add('active');
+  document.querySelector(`.screen[data-screen='${step}']`).classList.add('active');
   document.getElementById('stepIndicator').textContent = 'Schritt ' + step + ' / 5';
 }
 
@@ -805,6 +819,7 @@ async function analyze() {
     statusEl.className = 'status-line success';
     statusEl.textContent = 'Fertig — ' + analysisResult.speakers_detected.length + ' Rollen erkannt.';
 
+    document.getElementById('backToRolesBtn').style.display = 'block';
     showRoleSelection();
     setTimeout(() => goTo(2), 500);
 
@@ -857,7 +872,8 @@ let showOwnText = false;
 let showDirections = true;
 let feedbackMode = 'retry'; // 'silent' | 'retry' | 'continue'
 let autoPlayForeign = true;
-let strictness = 50; // 0 = lose, 100 = strikt
+let strictness = 25; // 0 = lose, 100 = strikt
+let chunkSize = 1; // 1 = Satz für Satz, 10 = viele Sätze am Stück
 let attemptCount = 0;
 let sessionStats = { correct: 0, wrong: 0, total: 0 };
 let recognition = null;
@@ -918,6 +934,20 @@ function showSceneAndPageSelection() {
   });
 
   updateStep3Validity();
+
+  // Startpunkt-Dropdown mit eigenen Dialogzeilen befüllen
+  const startSelect = document.getElementById('startPointSelect');
+  startSelect.innerHTML = '<option value="0">Von Anfang an</option>';
+  const allEntries = window.currentProject.entries;
+  allEntries.forEach((entry, index) => {
+    if (entry.type === 'dialogue' && window.currentProject.yourRoles.includes(entry.speaker)) {
+      const preview = entry.text.length > 50 ? entry.text.slice(0, 50) + '…' : entry.text;
+      const opt = document.createElement('option');
+      opt.value = index;
+      opt.textContent = (entry.scene ? 'Sz.' + entry.scene + ' · ' : '') + preview;
+      startSelect.appendChild(opt);
+    }
+  });
 }
 
 function toggleChip(chip, value, targetSet) {
@@ -993,8 +1023,49 @@ function updateStrictnessLabel(value) {
   document.getElementById('strictnessLabel').textContent = 'Genauigkeit: ' + label;
 }
 
+// Sammelt bis zu chunkSize Sätze aus eigenen aufeinanderfolgenden Zeilen.
+// Damit wird die "Abfrageeinheit" gesteuert: chunkSize=1 gibt einen Satz,
+// chunkSize=10 gibt viele Sätze am Stück.
+function buildChunk(entries, fromIndex) {
+  if (chunkSize === 1) {
+    // Einzelsatz-Modus: nur die aktuelle Zeile
+    return entries[fromIndex].text;
+  }
+
+  let sentenceCount = 0;
+  let result = '';
+  let i = fromIndex;
+
+  while (i < entries.length && sentenceCount < chunkSize) {
+    const e = entries[i];
+    if (e.type === 'stage_direction') { i++; continue; }
+    if (!isYourLine(e)) break; // Fremd-Zeile → Block endet hier
+
+    // Sätze dieser Zeile zählen und anhängen
+    const sents = e.text.match(/[^.!?]+[.!?]*/g) || [e.text];
+    for (const s of sents) {
+      if (sentenceCount >= chunkSize) break;
+      result += (result ? ' ' : '') + s.trim();
+      sentenceCount++;
+    }
+    i++;
+  }
+  return result || entries[fromIndex].text;
+}
+
+function updateChunkLabel(value) {
+  chunkSize = parseInt(value, 10);
+  let label;
+  if (chunkSize === 1) label = '1 Satz (Dialog)';
+  else if (chunkSize <= 3) label = chunkSize + ' Sätze';
+  else if (chunkSize <= 6) label = chunkSize + ' Sätze (gemischt)';
+  else label = chunkSize + ' Sätze (Monolog)';
+  document.getElementById('chunkLabel').textContent = 'Abfrageeinheit: ' + label;
+}
+
 function startPractice() {
-  practiceIndex = 0;
+  const startVal = parseInt(document.getElementById('startPointSelect').value, 10);
+  practiceIndex = startVal || 0;
   attemptCount = 0;
   sessionStats = { correct: 0, wrong: 0, total: 0 };
   const modeLabels = { full: 'Komplett', cue: 'Stichwort', cue_full: 'Ausführliches Stichwort' };
@@ -1044,8 +1115,11 @@ function renderCurrentLine() {
   hideFeedback();
   document.getElementById('revealBtn').style.display = 'none';
 
-  // Regieanweisungen überspringen, wenn der Toggle aus ist
-  while (practiceIndex < entries.length && entries[practiceIndex].type === 'stage_direction' && !showDirections) {
+  // Regieanweisungen überspringen:
+  // - immer, wenn der Toggle aus ist
+  // - auch im Stichwort-Modus, da Regieanweisungen kein Stichwort sind
+  const skipDirections = !showDirections || selectedMode === 'cue' || selectedMode === 'cue_full';
+  while (practiceIndex < entries.length && entries[practiceIndex].type === 'stage_direction' && skipDirections) {
     practiceIndex++;
   }
 
@@ -1055,6 +1129,7 @@ function renderCurrentLine() {
     document.getElementById('playBtn').disabled = true;
     document.getElementById('progressLabel').textContent = `Zeile ${entries.length} / ${entries.length}`;
     if (feedbackMode === 'silent') showSummary();
+    else setTimeout(() => showSummary(), 1500); // kurze Pause damit "Szene zu Ende" lesbar ist
     return;
   }
 
@@ -1066,11 +1141,14 @@ function renderCurrentLine() {
     document.getElementById('playBtn').disabled = true;
   } else if (isYourLine(entry)) {
     attemptCount = 0;
+    // chunkSize > 1: mehrere aufeinanderfolgende eigene Sätze zu einem Block sammeln
+    const chunkText = buildChunk(entries, practiceIndex);
     document.getElementById('lineRole').textContent = entry.speaker + ' — DEINE ZEILE';
-    document.getElementById('lineText').textContent = showOwnText ? entry.text : '🎤 jetzt sprechen';
+    document.getElementById('lineText').textContent = showOwnText ? chunkText : '🎤 jetzt sprechen';
     document.getElementById('playBtn').disabled = true;
     if (!showOwnText) document.getElementById('revealBtn').style.display = 'block';
-    startListening(entry);
+    // Virtuellen Entry mit zusammengefasstem Text fürs Mikrofon erstellen
+    startListening({ ...entry, text: chunkText });
   } else {
     // Fremd-Zeile: entweder automatisch vorlesen, oder auf Knopfdruck warten
     const { queue } = getReadAloudQueue(practiceIndex);
@@ -1091,8 +1169,13 @@ function renderCurrentLine() {
 }
 
 function revealOwnText() {
-  const entry = getActiveEntries()[practiceIndex];
-  document.getElementById('lineText').textContent = entry.text;
+  const entries = getActiveEntries();
+  const entry = entries[practiceIndex];
+  if (entry && entry.type === 'dialogue') {
+    const chunkText = buildChunk(entries, practiceIndex);
+    document.getElementById('lineText').textContent = chunkText;
+    document.getElementById('revealBtn').style.display = 'none';
+  }
 }
 
 function playCurrentLine() {
@@ -1218,7 +1301,7 @@ function handleSpokenResult(spoken, expectedEntry) {
     sessionStats.correct++;
     attemptCount = 0;
     showFeedback(true);
-    setTimeout(() => { practiceIndex++; renderCurrentLine(); }, 700);
+    setTimeout(() => { advancePastChunk(); renderCurrentLine(); }, 700);
     return;
   }
 
@@ -1226,15 +1309,14 @@ function handleSpokenResult(spoken, expectedEntry) {
   attemptCount++;
 
   if (feedbackMode === 'silent') {
-    // Kein Unterbrechen, einfach weiter
-    practiceIndex++;
+    advancePastChunk();
     renderCurrentLine();
     return;
   }
 
   if (feedbackMode === 'continue') {
     showFeedback(false);
-    setTimeout(() => { practiceIndex++; renderCurrentLine(); }, 1100);
+    setTimeout(() => { advancePastChunk(); renderCurrentLine(); }, 1100);
     return;
   }
 
@@ -1244,6 +1326,24 @@ function handleSpokenResult(spoken, expectedEntry) {
     setTimeout(() => showStuckOverlay(), 600);
   } else {
     setTimeout(() => startListening(expectedEntry), 1000);
+  }
+}
+
+// Rückt practiceIndex so weit vor, dass der gesamte abgefragte Chunk übersprungen wird.
+function advancePastChunk() {
+  const entries = getActiveEntries();
+  if (chunkSize === 1) {
+    practiceIndex++;
+    return;
+  }
+  let sentenceCount = 0;
+  while (practiceIndex < entries.length && sentenceCount < chunkSize) {
+    const e = entries[practiceIndex];
+    if (e.type === 'stage_direction') { practiceIndex++; continue; }
+    if (!isYourLine(e)) break;
+    const sents = e.text.match(/[^.!?]+[.!?]*/g) || [e.text];
+    sentenceCount += sents.length;
+    practiceIndex++;
   }
 }
 
@@ -1265,11 +1365,15 @@ function showStuckOverlay() {
 function stuckChoice(choice) {
   document.getElementById('stuckOverlay').style.display = 'none';
   attemptCount = 0;
+  const entry = getActiveEntries()[practiceIndex];
   if (choice === 'show') {
-    revealOwnText();
-    startListening(getActiveEntries()[practiceIndex]);
+    // Text sofort anzeigen
+    document.getElementById('lineText').textContent = entry.text;
+    document.getElementById('revealBtn').style.display = 'none';
+    // Mikrofon kurz danach starten, damit User Zeit hat Text zu lesen
+    setTimeout(() => startListening(entry), 800);
   } else if (choice === 'retry') {
-    startListening(getActiveEntries()[practiceIndex]);
+    startListening(entry);
   } else if (choice === 'skip') {
     practiceIndex++;
     renderCurrentLine();
