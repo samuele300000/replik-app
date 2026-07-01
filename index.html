@@ -119,6 +119,29 @@
   .status-line.error { color: var(--err); font-family: monospace; font-size: 11px; }
   .status-line.success { color: var(--ok); }
 
+  .saved-projects { display: flex; flex-direction: column; gap: 8px; margin-bottom: 28px; }
+  .saved-projects-empty { font-size: 13px; color: var(--muted); margin-bottom: 28px; }
+  .project-card {
+    border: 1px solid var(--line-strong);
+    border-radius: 4px;
+    padding: 12px 14px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    cursor: pointer;
+    transition: border-color 0.2s, background 0.2s;
+  }
+  .project-card:hover { border-color: var(--spot-dim); background: rgba(216,154,78,0.05); }
+  .project-card .project-name { font-family: 'Courier Prime', monospace; font-size: 14px; }
+  .project-card .project-meta { font-size: 11px; color: var(--muted); margin-top: 2px; }
+  .project-card .project-delete {
+    background: none; border: none; color: var(--muted); font-size: 16px;
+    cursor: pointer; padding: 4px 8px; flex-shrink: 0; line-height: 1;
+  }
+  .project-card .project-delete:hover { color: var(--err); }
+  .page-limit-note { font-size: 12px; color: var(--muted); margin-top: 6px; }
+
   .role-list { display: flex; flex-direction: column; gap: 10px; margin-top: 4px; }
   .role-card {
     border: 1px solid var(--line-strong);
@@ -427,6 +450,11 @@
     <h1>Skript hochladen</h1>
     <p class="stage-direction">PDF hochladen und loslegen</p>
 
+    <div id="savedProjectsSection" style="display:none;">
+      <label>Gespeicherte Skripte</label>
+      <div class="saved-projects" id="savedProjectsList"></div>
+    </div>
+
     <label>PDF-Skript</label>
     <div class="dropzone" id="dropzone" onclick="document.getElementById('fileInput').click()">
       <div class="label-main" id="dropLabel">Hier klicken zum Auswählen</div>
@@ -434,6 +462,7 @@
       <div class="file-name" id="fileName"></div>
     </div>
     <input type="file" id="fileInput" accept="application/pdf">
+    <div class="page-limit-note" id="pageLimitNote"></div>
 
     <div class="status-line" id="statusLine"></div>
 
@@ -623,6 +652,10 @@
 <script>
 pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
 
+// --- Beta-Limit: max. Seitenzahl pro Skript, um Token-Kosten während der Testphase zu begrenzen. ---
+// Später (Phase 5/Monetarisierung) wird dieses Limit an ein Guthaben/Zahlung gekoppelt statt fix zu sein.
+const MAX_PAGES = 10;
+
 let selectedFile = null;
 let analysisResult = null;
 let selectedRoles = new Set();
@@ -643,12 +676,146 @@ document.getElementById('fileInput').addEventListener('change', (e) => {
   document.getElementById('dropzone').classList.add('has-file');
   document.getElementById('dropLabel').textContent = 'Datei ausgewählt:';
   document.getElementById('dropSub').textContent = '';
+  document.getElementById('statusLine').className = 'status-line';
+  document.getElementById('statusLine').textContent = '';
   checkReady();
 });
 
 function checkReady() {
   document.getElementById('analyzeBtn').disabled = !selectedFile;
 }
+
+// ============================================================
+// Projekte speichern (localStorage) - spart Tokens, weil ein
+// einmal analysiertes Skript nicht erneut an Claude geschickt
+// werden muss.
+// ============================================================
+const PROJECTS_STORAGE_KEY = 'replik_projects_v1';
+const MAX_STORED_PROJECTS = 15;
+
+function makeProjectId(file) {
+  return file.name + '__' + file.size;
+}
+
+function getStoredProjects() {
+  try {
+    const raw = localStorage.getItem(PROJECTS_STORAGE_KEY);
+    if (!raw) return [];
+    const list = JSON.parse(raw);
+    return Array.isArray(list) ? list : [];
+  } catch (e) {
+    console.error('Konnte gespeicherte Projekte nicht lesen:', e);
+    return [];
+  }
+}
+
+function setStoredProjects(list) {
+  // Falls der Speicher voll ist (localStorage-Limit ~5-10MB), werfen wir
+  // von hinten (älteste) Projekte raus, bis es wieder passt.
+  let attemptList = list.slice();
+  while (attemptList.length > 0) {
+    try {
+      localStorage.setItem(PROJECTS_STORAGE_KEY, JSON.stringify(attemptList));
+      return true;
+    } catch (e) {
+      attemptList.pop();
+    }
+  }
+  try {
+    localStorage.removeItem(PROJECTS_STORAGE_KEY);
+  } catch (e) { /* ignore */ }
+  return false;
+}
+
+function saveAnalysisToStorage(file, result, pageCount) {
+  const id = makeProjectId(file);
+  let list = getStoredProjects().filter(p => p.id !== id);
+
+  list.unshift({
+    id,
+    fileName: file.name,
+    fileSize: file.size,
+    pageCount: pageCount,
+    speakerCount: result.speakers_detected.length,
+    entryCount: result.entries.length,
+    savedAt: new Date().toISOString(),
+    analysisResult: result
+  });
+
+  if (list.length > MAX_STORED_PROJECTS) {
+    list = list.slice(0, MAX_STORED_PROJECTS);
+  }
+
+  const ok = setStoredProjects(list);
+  if (!ok) {
+    console.warn('Projekt konnte nicht lokal gespeichert werden (Speicher voll).');
+  }
+  renderSavedProjects();
+}
+
+function deleteStoredProject(id, evt) {
+  if (evt) evt.stopPropagation();
+  const list = getStoredProjects().filter(p => p.id !== id);
+  setStoredProjects(list);
+  renderSavedProjects();
+}
+
+function openStoredProject(id) {
+  const project = getStoredProjects().find(p => p.id === id);
+  if (!project) return;
+
+  selectedFile = { name: project.fileName, size: project.fileSize };
+  analysisResult = project.analysisResult;
+
+  document.getElementById('fileName').textContent = project.fileName;
+  document.getElementById('dropzone').classList.add('has-file');
+  document.getElementById('dropLabel').textContent = 'Geladen (gespeichert):';
+  document.getElementById('dropSub').textContent = '';
+  document.getElementById('backToRolesBtn').style.display = 'block';
+
+  showRoleSelection();
+  goTo(2);
+}
+
+function formatSavedDate(iso) {
+  const d = new Date(iso);
+  return d.toLocaleDateString('de-CH', { day: '2-digit', month: '2-digit', year: 'numeric' }) +
+    ' ' + d.toLocaleTimeString('de-CH', { hour: '2-digit', minute: '2-digit' });
+}
+
+function renderSavedProjects() {
+  const section = document.getElementById('savedProjectsSection');
+  const list = document.getElementById('savedProjectsList');
+  const projects = getStoredProjects();
+
+  if (projects.length === 0) {
+    section.style.display = 'none';
+    list.innerHTML = '';
+    return;
+  }
+
+  section.style.display = 'block';
+  list.innerHTML = '';
+
+  projects.forEach(p => {
+    const card = document.createElement('div');
+    card.className = 'project-card';
+    card.innerHTML = `
+      <div>
+        <div class="project-name">${p.fileName}</div>
+        <div class="project-meta">${p.pageCount} Seiten · ${p.speakerCount} Rollen · gespeichert ${formatSavedDate(p.savedAt)}</div>
+      </div>
+      <button class="project-delete" title="Projekt löschen">✕</button>
+    `;
+    card.onclick = () => openStoredProject(p.id);
+    card.querySelector('.project-delete').onclick = (evt) => deleteStoredProject(p.id, evt);
+    list.appendChild(card);
+  });
+}
+
+document.getElementById('pageLimitNote').textContent = `Beta-Phase: PDFs bis ${MAX_PAGES} Seiten.`;
+renderSavedProjects();
+
 
 // Extrahiert den Text seitenweise (statt als ein grosser String), damit wir
 // lange Skripte in mehreren API-Aufrufen (Chunks) analysieren können.
@@ -929,12 +1096,19 @@ async function analyze() {
 
   try {
     const pages = await extractPdfPages(selectedFile);
+
+    if (pages.length > MAX_PAGES) {
+      throw new Error(`Dieses PDF hat ${pages.length} Seiten. In der Beta-Phase sind maximal ${MAX_PAGES} Seiten pro Skript möglich.`);
+    }
+
     setStatus('Claude analysiert das Skript...');
 
     analysisResult = await analyzeScript(pages, setStatus);
 
     statusEl.className = 'status-line success';
     statusEl.textContent = 'Fertig — ' + analysisResult.speakers_detected.length + ' Rollen erkannt.';
+
+    saveAnalysisToStorage(selectedFile, analysisResult, pages.length);
 
     document.getElementById('backToRolesBtn').style.display = 'block';
     showRoleSelection();
@@ -1511,3 +1685,4 @@ function showSummary() {
 </script>
 </body>
 </html>
+
