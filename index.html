@@ -4,11 +4,10 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Replik — Text lernen</title>
-  <script>
-  window.va = window.va || function () { (window.vaq = window.vaq || []).push(arguments); };
-</script>
-<script defer src="/_vercel/insights/script.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script> window.va = window.va || function () { (window.vaq = window.vaq || []).push(arguments); }; </script>
+<script defer src="/_vercel/insights/script.js"></script>
 <style>
   @import url('https://fonts.googleapis.com/css2?family=Courier+Prime:ital,wght@0,400;0,700;1,400&family=Inter:wght@400;500;600&display=swap');
 
@@ -58,6 +57,31 @@
   .wordmark { font-family: 'Courier Prime', monospace; font-size: 18px; }
   .wordmark span { color: var(--spot); }
   .step-indicator { font-size: 12px; color: var(--muted); letter-spacing: 0.04em; }
+
+  .authbar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 10px 24px;
+    border-bottom: 1px solid var(--line);
+    font-size: 12px;
+    color: var(--muted);
+    gap: 10px;
+  }
+  .authbar .authbar-email { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .authbar button {
+    background: none;
+    border: 1px solid var(--line-strong);
+    color: var(--paper);
+    border-radius: 4px;
+    padding: 5px 10px;
+    font-size: 12px;
+    cursor: pointer;
+    flex-shrink: 0;
+    font-family: 'Inter', sans-serif;
+    transition: border-color 0.2s;
+  }
+  .authbar button:hover { border-color: var(--spot); }
 
   .screen {
     flex: 1;
@@ -190,11 +214,19 @@
     font-family: 'Courier Prime', monospace;
   }
 
+  /* Fix (Beta-Feedback #2): Haupt-Buttons bleiben IMMER am unteren
+     Bildschirmrand sichtbar (position:fixed statt absolute). Der Inhalt
+     scrollt dahinter; die Bar ist auf die App-Breite (480px) zentriert. */
   .cta-bar {
-    position: absolute;
-    bottom: 0; left: 0; right: 0;
+    position: fixed;
+    bottom: 0;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 100%;
+    max-width: 480px;
     padding: 16px 24px 24px;
     background: linear-gradient(to top, var(--stage) 65%, transparent);
+    z-index: 50;
   }
   .btn-primary {
     width: 100%;
@@ -438,6 +470,99 @@
     margin-bottom: 8px;
   }
   .overlay-btn:hover { border-color: var(--spot); }
+  .overlay-btn.primary { background: var(--spot); color: var(--stage); border: none; font-weight: 600; }
+  .overlay-btn.primary:hover { background: var(--spot-bright); }
+  .overlay-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+  .overlay-close {
+    background: none; border: none; color: var(--muted);
+    font-size: 13px; cursor: pointer; width: 100%; padding: 8px; margin-top: 2px;
+    text-align: center;
+  }
+  .overlay-close:hover { color: var(--paper); }
+  .overlay-price {
+    font-family: 'Courier Prime', monospace;
+    font-size: 26px; font-weight: 700; color: var(--spot);
+    text-align: center; margin: 14px 0 18px;
+  }
+
+  /* Startseite: zwei gleichwertige Optionen (Tutorial + eigenes Skript) */
+  .option-card {
+    border: 1px solid var(--line-strong);
+    border-radius: 6px;
+    padding: 18px;
+    margin-bottom: 20px;
+  }
+  .option-card .option-title {
+    font-family: 'Courier Prime', monospace;
+    font-weight: 700; font-size: 16px; color: var(--spot);
+    margin-bottom: 6px;
+  }
+  .option-card .option-desc { font-size: 13px; color: var(--paper-dim); line-height: 1.5; margin-bottom: 14px; }
+  .btn-secondary {
+    width: 100%;
+    background: var(--stage-3);
+    border: 1px solid var(--line-strong);
+    color: var(--paper);
+    border-radius: 4px;
+    padding: 13px;
+    font-size: 14px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: border-color 0.2s;
+  }
+  .btn-secondary:hover { border-color: var(--spot); }
+
+  .checkbox-row {
+    display: flex; align-items: flex-start; gap: 10px;
+    font-size: 12px; color: var(--paper-dim); line-height: 1.5;
+    margin-bottom: 12px; cursor: pointer;
+  }
+  .checkbox-row input[type="checkbox"] { margin-top: 2px; accent-color: var(--spot); flex-shrink: 0; }
+  .checkbox-row a { color: var(--spot); }
+
+  .voucher-code-box {
+    background: var(--stage-3);
+    border: 1px dashed var(--spot);
+    border-radius: 6px;
+    padding: 14px;
+    text-align: center;
+    font-family: 'Courier Prime', monospace;
+    font-size: 20px;
+    letter-spacing: 0.08em;
+    color: var(--spot-bright);
+    margin: 14px 0;
+    user-select: all;
+  }
+
+  /* Mikrofon-Statusleiste (Beta-Feedback #4): immer sichtbar in der Probe */
+  .mic-bar {
+    display: flex; align-items: center; justify-content: center; gap: 8px;
+    font-size: 12px; margin-bottom: 10px; min-height: 30px;
+  }
+  .mic-bar.listening { color: var(--err); }
+  .mic-bar.idle { color: var(--muted); }
+  .mic-restart-btn {
+    background: var(--stage-3);
+    border: 1px solid var(--err);
+    color: var(--paper);
+    border-radius: 20px;
+    padding: 6px 14px;
+    font-size: 12px;
+    cursor: pointer;
+  }
+  .mic-restart-btn:hover { border-color: var(--spot); }
+
+  .wrong-word { color: var(--err); text-decoration: underline; text-decoration-color: var(--err); }
+
+  .footer-links {
+    text-align: center;
+    padding: 8px 0 90px;
+    font-size: 11px;
+  }
+  .footer-links a { color: var(--muted); text-decoration: underline; text-decoration-color: rgba(156,149,138,0.4); }
+
+  /* Probe-Screen braucht mehr Platz unten, weil die fixe Bar dort höher ist */
+  .screen[data-screen="5"] { padding-bottom: 190px; }
 </style>
 </head>
 <body>
@@ -449,26 +574,46 @@
     <div class="step-indicator" id="stepIndicator">Schritt 1 / 5</div>
   </div>
 
-  <!-- SCREEN 1: Upload -->
+  <div class="authbar" id="authBar">
+    <span class="authbar-email" id="authStatus">...</span>
+    <button id="authActionBtn" onclick="handleAuthButtonClick()">...</button>
+  </div>
+
+  <!-- SCREEN 1: Start (Tutorial + eigenes Skript, beide gleichzeitig sichtbar) -->
   <div class="screen active" data-screen="1">
-    <h1>Skript hochladen</h1>
-    <p class="stage-direction">PDF hochladen und loslegen</p>
+    <h1 id="landingTitle">Text lernen für die Bühne</h1>
+    <p class="stage-direction" id="landingSubtitle">Tutorial ausprobieren oder eigenes Skript hochladen</p>
 
-    <div id="savedProjectsSection" style="display:none;">
-      <label>Gespeicherte Skripte</label>
-      <div class="saved-projects" id="savedProjectsList"></div>
+    <!-- Option A: Tutorial, sofort und ohne Login nutzbar -->
+    <div class="option-card">
+      <div class="option-title">Sofort ausprobieren</div>
+      <div class="option-desc">Mit unserem kurzen Tutorial-Stück «Probe macht Meister» lernst du alle Funktionen kennen — ohne Anmeldung, ohne Upload.</div>
+      <button class="btn-secondary" id="tutorialBtn" onclick="startTutorial()">▶ Tutorial starten</button>
     </div>
 
-    <label>PDF-Skript</label>
-    <div class="dropzone" id="dropzone" onclick="document.getElementById('fileInput').click()">
-      <div class="label-main" id="dropLabel">Hier klicken zum Auswählen</div>
-      <div class="label-sub" id="dropSub">PDF-Datei</div>
-      <div class="file-name" id="fileName"></div>
+    <!-- Option B: eigenes Skript (Fake-Door: Preis-Gate vor Freischaltung) -->
+    <div class="option-card">
+      <div class="option-title">Lade dein eigenes Skript hoch</div>
+      <div class="option-desc">PDF hochladen, Rollen erkennen lassen, per Sprache üben.</div>
+
+      <div id="savedProjectsSection" style="display:none;">
+        <label>Gespeicherte Skripte</label>
+        <div class="saved-projects" id="savedProjectsList"></div>
+      </div>
+
+      <div class="dropzone" id="dropzone" onclick="handleOwnScriptClick()">
+        <div class="label-main" id="dropLabel">Hier klicken zum Auswählen</div>
+        <div class="label-sub" id="dropSub">PDF-Datei</div>
+        <div class="file-name" id="fileName"></div>
+      </div>
+      <input type="file" id="fileInput" accept="application/pdf">
+      <div class="page-limit-note" id="pageLimitNote"></div>
+      <button class="btn-text" onclick="openRedeemOverlay()" style="padding:10px 0 0;">Ich habe einen Gutscheincode</button>
     </div>
-    <input type="file" id="fileInput" accept="application/pdf">
-    <div class="page-limit-note" id="pageLimitNote"></div>
 
     <div class="status-line" id="statusLine"></div>
+
+    <div class="footer-links"><a href="/datenschutz.html" target="_blank">Datenschutzerklärung</a></div>
 
     <div class="cta-bar">
       <button class="btn-text" id="backToRolesBtn" style="display:none;" onclick="goTo(2)">Zurück zur Rollenauswahl (ohne neu zu analysieren)</button>
@@ -495,17 +640,17 @@
     <p class="stage-direction">Szenen, Seiten und Startpunkt wählen</p>
 
     <div class="select-group">
-      <div class="select-group-label">Szenen</div>
+      <div class="select-group-label">Szene wählen</div>
       <div class="chip-list" id="sceneChipList"></div>
     </div>
 
     <div class="select-group">
-      <div class="select-group-label">Seiten</div>
+      <div class="select-group-label">Seiten wählen</div>
       <div class="chip-list" id="pageChipList"></div>
     </div>
 
     <div class="select-group">
-      <div class="select-group-label">Startpunkt</div>
+      <div class="select-group-label">Startpunkt wählen</div>
       <select id="startPointSelect" style="width:100%; background:var(--stage-2); border:1px solid var(--line-strong); color:var(--paper); padding:10px 12px; border-radius:4px; font-size:14px; font-family:inherit;">
         <option value="0">Von Anfang an</option>
       </select>
@@ -527,7 +672,7 @@
         <div class="mode-title">Komplett</div>
         <div class="mode-desc">Jede Zeile aller anderen Rollen wird vorgelesen — der ganze Dialog.</div>
       </div>
-      <div class="mode-card" data-mode="cue" onclick="selectMode('cue')">
+      <div class="mode-card selected" data-mode="cue" onclick="selectMode('cue')">
         <div class="mode-title">Stichwort</div>
         <div class="mode-desc">Nur der letzte Satz vor deiner Zeile wird vorgelesen.</div>
       </div>
@@ -568,20 +713,25 @@
           <div class="mode-title">Frei durch</div>
           <div class="mode-desc">Kein Unterbrechen, am Ende eine Zusammenfassung.</div>
         </div>
-        <div class="mode-card selected" data-feedback="retry" onclick="selectFeedbackMode('retry')">
-          <div class="mode-title">Nochmal</div>
-          <div class="mode-desc">Bei Fehler: "Falsch", zurück zum Stichwort.</div>
+        <div class="mode-card" data-feedback="correct" onclick="selectFeedbackMode('correct')">
+          <div class="mode-title">Fehler korrigieren</div>
+          <div class="mode-desc">Die Stimme sagt automatisch das richtige Wort und du beginnst nochmal von vorn. Bei angezeigtem Text wird die falsche Stelle rot markiert.</div>
         </div>
-        <div class="mode-card" data-feedback="continue" onclick="selectFeedbackMode('continue')">
-          <div class="mode-title">Weiter trotz Fehler</div>
-          <div class="mode-desc">Fehler wird markiert, aber es geht direkt weiter.</div>
+        <div class="mode-card selected" data-feedback="show" onclick="selectFeedbackMode('show')">
+          <div class="mode-title">Fehler anzeigen</div>
+          <div class="mode-desc">Die Stimme sagt «Falsch» und springt zur betreffenden Stelle zurück.</div>
         </div>
       </div>
     </div>
 
     <div class="select-group">
-      <div class="select-group-label" id="strictnessLabel">Genauigkeit: locker</div>
-      <input type="range" id="strictnessSlider" min="0" max="100" value="25" oninput="updateStrictnessLabel(this.value)">
+      <div class="select-group-label">Genauigkeit</div>
+      <div class="chip-list">
+        <div class="chip" data-accuracy="locker" onclick="selectAccuracy('locker')">Locker</div>
+        <div class="chip selected" data-accuracy="ausgewogen" onclick="selectAccuracy('ausgewogen')">Ausgewogen</div>
+        <div class="chip" data-accuracy="strikt" onclick="selectAccuracy('strikt')">Strikt</div>
+      </div>
+      <div style="font-size:12px; color:var(--muted); margin-top:8px;" id="accuracyHint">Kleine Abweichungen sind ok (z.B. «der» statt «die»).</div>
     </div>
 
     <div class="select-group">
@@ -592,7 +742,7 @@
 
     <div class="cta-bar">
       <button class="btn-text" onclick="goTo(3)">Szenen ändern</button>
-      <button class="btn-primary" id="toStep5" disabled onclick="startPractice()">Probe beginnen</button>
+      <button class="btn-primary" id="toStep5" onclick="startPractice()">Probe beginnen</button>
     </div>
   </div>
 
@@ -608,21 +758,20 @@
         <div class="feedback-pill" id="feedbackPill"></div>
         <button class="reveal-btn" id="revealBtn" onclick="revealOwnText()" style="display:none;">Text trotzdem zeigen</button>
       </div>
+    </div>
 
-      <div class="mic-indicator" id="micIndicator" style="display:none;">
-        <div class="mic-dot"></div>
-        <span id="micStatusText">Höre zu…</span>
+    <!-- Steuerung fix am unteren Rand (Beta-Feedback #2): der Weiter-Button
+         bleibt immer an derselben Stelle, der Text scrollt dahinter. -->
+    <div class="cta-bar">
+      <div class="mic-bar idle" id="micBar">
+        <span id="micBarContent"></span>
       </div>
-
       <div class="practice-controls">
         <button class="ctrl-btn" id="prevBtn" onclick="stepLine(-1)">‹ Zurück</button>
         <button class="ctrl-btn primary" id="playBtn" onclick="playCurrentLine()">▶ Vorlesen</button>
         <button class="ctrl-btn" id="nextBtn" onclick="stepLine(1)">Weiter ›</button>
       </div>
-      <div class="progress-label" id="progressLabel"></div>
-    </div>
-
-    <div class="cta-bar">
+      <div class="progress-label" id="progressLabel" style="text-align:center; margin-top:8px;"></div>
       <button class="btn-text" onclick="goTo(4)">Modus ändern</button>
     </div>
   </div>
@@ -653,17 +802,426 @@
   </div>
 </div>
 
+<!-- Fake-Door: Preis-Anzeige vor Freischaltung des eigenen Uploads -->
+<div class="overlay" id="priceOverlay" style="display:none;">
+  <div class="overlay-card">
+    <div class="overlay-title">Eigenes Skript freischalten</div>
+    <div class="overlay-text">Lade dein eigenes Skript hoch und übe jede Rolle per Sprache — inkl. KI-Analyse deines PDFs.</div>
+    <div class="overlay-price" id="priceDisplay">CHF —</div>
+    <button class="overlay-btn primary" onclick="openEmailOverlay()">Freischalten</button>
+    <button class="overlay-btn" onclick="openRedeemOverlay()">Ich habe einen Gutscheincode</button>
+    <button class="overlay-close" onclick="closeOverlay('priceOverlay')">Vielleicht später</button>
+  </div>
+</div>
+
+<!-- Fake-Door: E-Mail-Erfassung (Platzhalter, bis Google/Supabase-Anmeldung hier eingesetzt wird) -->
+<div class="overlay" id="emailOverlay" style="display:none;">
+  <div class="overlay-card">
+    <div class="overlay-title">Fast geschafft</div>
+    <div class="overlay-text">Gib deine E-Mail-Adresse an, um fortzufahren.</div>
+    <input type="text" id="purchaseEmail" placeholder="dein.name@beispiel.ch" inputmode="email" autocomplete="email">
+    <label class="checkbox-row" style="margin-top:10px;">
+      <input type="checkbox" id="consentCheckbox">
+      <span>Ich bin mit der Verarbeitung meiner Daten gemäß <a href="/datenschutz.html" target="_blank">Datenschutzerklärung</a> einverstanden.</span>
+    </label>
+    <label class="checkbox-row">
+      <input type="checkbox" id="notifyCheckbox">
+      <span>Ich möchte informiert werden, sobald Zahlungen live sind.</span>
+    </label>
+    <div class="status-line error" id="emailError" style="margin:0 0 10px; min-height:0;"></div>
+    <button class="overlay-btn primary" id="emailSubmitBtn" onclick="submitPurchaseEmail()">Weiter</button>
+    <button class="overlay-close" onclick="closeOverlay('emailOverlay')">Abbrechen</button>
+  </div>
+</div>
+
+<!-- Fake-Door: ehrliche Nachricht + Gutschein -->
+<div class="overlay" id="voucherOverlay" style="display:none;">
+  <div class="overlay-card">
+    <div class="overlay-title">Danke für dein Interesse! 🎭</div>
+    <div class="overlay-text">Wir sind aktuell in der Testphase — Zahlungen sind noch nicht live. Als Dankeschön bekommst du hier deinen Gutschein für ein Skript kostenlos. Der Code wurde für deine E-Mail-Adresse hinterlegt.</div>
+    <div class="voucher-code-box" id="voucherCodeBox">—</div>
+    <div class="overlay-text" id="voucherExpiryNote" style="margin-bottom:12px;"></div>
+    <button class="overlay-btn primary" onclick="redeemFromVoucherOverlay()">Gutschein jetzt einlösen</button>
+    <button class="overlay-close" onclick="closeOverlay('voucherOverlay')">Später einlösen</button>
+  </div>
+</div>
+
+<!-- Gutschein einlösen (auch unabhängig vom Kauf-Flow erreichbar) -->
+<div class="overlay" id="redeemOverlay" style="display:none;">
+  <div class="overlay-card">
+    <div class="overlay-title">Gutschein einlösen</div>
+    <div class="overlay-text">Ein Gutschein schaltet die Analyse eines eigenen Skripts frei (einmalig pro E-Mail-Adresse).</div>
+    <label>Gutscheincode</label>
+    <input type="text" id="redeemCode" placeholder="REPLIK-XXXX-XXXX" autocomplete="off">
+    <label style="margin-top:8px;">E-Mail-Adresse</label>
+    <input type="text" id="redeemEmail" placeholder="dein.name@beispiel.ch" inputmode="email" autocomplete="email">
+    <div class="status-line error" id="redeemError" style="margin:0 0 10px; min-height:0;"></div>
+    <button class="overlay-btn primary" id="redeemBtn" onclick="submitRedeem()">Einlösen</button>
+    <button class="overlay-close" onclick="closeOverlay('redeemOverlay')">Abbrechen</button>
+  </div>
+</div>
+
 <script>
 pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
 
+// ============================================================
+// Supabase (Login mit Google) - "supabase" ist hier der globale
+// Name, den das CDN-Script mitbringt; wir nennen unsere Instanz
+// bewusst anders, um die Namen nicht zu verwechseln.
+// ============================================================
+const SUPABASE_URL = 'https://ucrbxslyhunfuwnpahxy.supabase.co';
+const SUPABASE_PUBLISHABLE_KEY = 'sb_publishable_2-ou59BRxT_0zfD7HXYaQw_DLusk7dl';
+const supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY);
+
+let currentUser = null;
+
+function renderAuthBar(user) {
+  currentUser = user;
+  const statusEl = document.getElementById('authStatus');
+  const btnEl = document.getElementById('authActionBtn');
+
+  if (user) {
+    // Beta-Feedback #3: Login-Status deutlich sichtbar machen
+    const name = (user.user_metadata && user.user_metadata.full_name) || user.email || 'Angemeldet';
+    statusEl.innerHTML = '<span style="color:var(--ok);">●</span> <span style="color:var(--paper);">Angemeldet als <strong>' + name + '</strong></span>';
+    btnEl.textContent = 'Abmelden';
+  } else {
+    statusEl.textContent = 'Nicht angemeldet';
+    btnEl.textContent = 'Mit Google anmelden';
+  }
+}
+
+async function handleAuthButtonClick() {
+  if (currentUser) {
+    await supabaseClient.auth.signOut();
+  } else {
+    await supabaseClient.auth.signInWithOAuth({
+      provider: 'google',
+      options: { redirectTo: window.location.origin + window.location.pathname }
+    });
+  }
+}
+
+// Reagiert auf Login/Logout, auch direkt nach dem Redirect von Google zurück auf die Seite.
+supabaseClient.auth.onAuthStateChange((_event, session) => {
+  renderAuthBar(session ? session.user : null);
+});
+
+// Initialer Zustand beim Laden der Seite (falls schon eine Session besteht).
+supabaseClient.auth.getSession().then(({ data }) => {
+  renderAuthBar(data.session ? data.session.user : null);
+});
+
+// ============================================================
+// SOFT-LAUNCH / FAKE-DOOR-TEST
+// Misst Zahlungsbereitschaft ohne echte Zahlungen. Alles hier ist
+// bewusst konfigurierbar, damit Preise/Fristen ohne Code-Änderung
+// tief im Code angepasst werden können.
+// ============================================================
+const FAKE_DOOR_CONFIG = {
+  // A/B-Preisvarianten (Anzeige-Strings, frei anpassbar solange Pricing nicht final ist)
+  prices: { A: 'CHF 5.–', B: 'CHF 9.–' },
+  // Ende der Testphase = Ablaufdatum neuer Gutscheine (Anzeige; das
+  // verbindliche Datum setzt der Server via VOUCHER_EXPIRES_AT).
+  voucherExpiryDisplay: '31.08.2026'
+};
+
+// --- Session-ID (anonym, bleibt im Browser) ---
+function getSessionId() {
+  let id = localStorage.getItem('replik_session_id');
+  if (!id) {
+    id = 'S-' + Math.random().toString(36).slice(2, 10) + '-' + Date.now().toString(36);
+    localStorage.setItem('replik_session_id', id);
+  }
+  return id;
+}
+const SESSION_ID = getSessionId();
+
+// --- UTM-Parameter & Zielgruppen-Segment aus der URL lesen und merken,
+//     damit sie auch nach Navigation/Reload an jedem Event hängen ---
+function captureUtmAndSegment() {
+  const params = new URLSearchParams(window.location.search);
+  const stored = JSON.parse(localStorage.getItem('replik_utm') || '{}');
+  ['utm_source', 'utm_medium', 'utm_campaign'].forEach(k => {
+    if (params.get(k)) stored[k] = params.get(k);
+  });
+  // Segment: ?seg=schauspielschueler|profis|laientheater (oder eigener Wert)
+  if (params.get('seg')) stored.segment = params.get('seg');
+  localStorage.setItem('replik_utm', JSON.stringify(stored));
+  return stored;
+}
+const UTM = captureUtmAndSegment();
+
+// Leichte Wording-Variante pro Segment (gleicher Flow, gleiches Tracking)
+(function applySegmentWording() {
+  const wording = {
+    schauspielschueler: { title: 'Dein Text sitzt vor dem Vorsprechen', sub: 'üben, wann immer du willst — ohne Szenenpartner' },
+    profis: { title: 'Textsicher zur Probe', sub: 'Stichwort-Abfrage wie mit Souffleuse' },
+    laientheater: { title: 'Gemeinsam textsicher zur Premiere', sub: 'üben zu Hause, glänzen auf der Bühne' }
+  };
+  const w = wording[UTM.segment];
+  if (w) {
+    document.getElementById('landingTitle').textContent = w.title;
+    document.getElementById('landingSubtitle').textContent = w.sub;
+  }
+})();
+
+// --- A/B-Preisvariante: deterministisch aus der Session-ID gehasht ---
+function getPriceVariant() {
+  let hash = 0;
+  for (let i = 0; i < SESSION_ID.length; i++) {
+    hash = ((hash << 5) - hash + SESSION_ID.charCodeAt(i)) | 0;
+  }
+  return (Math.abs(hash) % 2 === 0) ? 'A' : 'B';
+}
+const PRICE_VARIANT = getPriceVariant();
+
+// --- Funnel-Event an den Server schicken (landet in Supabase "funnel_events").
+//     Fire-and-forget: Tracking darf die App nie blockieren oder kaputt machen. ---
+function track(eventName, extra) {
+  try {
+    fetch('/api/track', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        event: eventName,
+        session_id: SESSION_ID,
+        utm_source: UTM.utm_source || null,
+        utm_medium: UTM.utm_medium || null,
+        utm_campaign: UTM.utm_campaign || null,
+        segment: UTM.segment || null,
+        price_variant: PRICE_VARIANT,
+        extra: extra || null
+      })
+    }).catch(() => {});
+  } catch (e) { /* Tracking-Fehler bewusst ignorieren */ }
+}
+
+// --- Freischaltungs-Status (nach Gutschein-Einlösung) ---
+// { email, code, redeemedAt, used: bool } — "used" wird nach der ersten
+// erfolgreichen Analyse eines eigenen Skripts gesetzt (1 Gutschein = 1 Skript).
+function getUnlockState() {
+  try { return JSON.parse(localStorage.getItem('replik_unlock') || 'null'); } catch (e) { return null; }
+}
+function setUnlockState(state) {
+  localStorage.setItem('replik_unlock', JSON.stringify(state));
+}
+function hasActiveUnlock() {
+  const u = getUnlockState();
+  return !!(u && !u.used);
+}
+
+// ============================================================
+// TUTORIAL-SKRIPT «Probe macht Meister»
+// Vorgeladen und ohne Login/Analyse nutzbar. Die Dialoge erklären
+// die App selbst — bei Änderungen an Einstellungen/Modi bitte die
+// betreffenden Zeilen hier mit anpassen!
+// ============================================================
+const TUTORIAL_PROJECT = {
+  fileName: 'Tutorial — Probe macht Meister',
+  scene_heading: 'INT. THEATER – BACKSTAGE – ABEND VOR DER PREMIERE',
+  speakers_detected: ['MARA', 'JONAS', 'LEA'],
+  entries: [
+    { type: 'stage_direction', text: 'Backstage im Theater. Kulissen lehnen an der Wand, ein Kostümständer, gedämpftes Licht. JONAS sitzt auf einem Kistenstapel, ein zerknittertes Textbuch in der Hand, blättert nervös. MARA kommt mit einem Tablet herein.', page: 1, scene: 'Backstage' },
+    { type: 'dialogue', speaker: 'MARA', text: 'Jonas. Du siehst aus, als hättest du einen Geist gesehen. Oder schlimmer – deinen eigenen Text.', page: 1, scene: 'Backstage' },
+    { type: 'dialogue', speaker: 'JONAS', text: 'Ich krieg das nicht in den Kopf. Drei Seiten Monolog, und ich hab niemanden, der mir die Stichworte gibt.', page: 1, scene: 'Backstage' },
+    { type: 'dialogue', speaker: 'MARA', text: 'Dafür brauchst du keinen Menschen. Dafür brauchst du das hier.', page: 1, scene: 'Backstage', inline_directions: [{ after_word_index: 4, text: 'hält das Tablet hoch' }] },
+    { type: 'dialogue', speaker: 'JONAS', text: 'Was ist das?', page: 1, scene: 'Backstage' },
+    { type: 'dialogue', speaker: 'MARA', text: 'Replik. Eine App zum Textlernen. Du lädst dein Skript als PDF hoch, und der Rest geht fast von allein.', page: 1, scene: 'Backstage' },
+    { type: 'dialogue', speaker: 'JONAS', text: 'Fast?', page: 1, scene: 'Backstage' },
+    { type: 'dialogue', speaker: 'MARA', text: 'Pass auf. Ich lade dein Textbuch hoch – einmal antippen, PDF auswählen, fertig. Die App liest das Dokument und erkennt automatisch, wer welche Zeile spricht und was reine Regieanweisung ist.', page: 1, scene: 'Backstage' },
+    { type: 'dialogue', speaker: 'JONAS', text: 'Das macht sie einfach so?', page: 1, scene: 'Backstage' },
+    { type: 'dialogue', speaker: 'MARA', text: 'Sie analysiert den Text, ja. Danach fragt sie dich: «Wer bist du?» – du wählst deine Rolle aus der Liste, notfalls auch mehrere, falls du wie letztes Jahr drei Nebenrollen gleichzeitig spielen musst.', page: 1, scene: 'Backstage' },
+    { type: 'stage_direction', text: 'LEA kommt mit einem Klemmbrett herein.', page: 1, scene: 'Backstage' },
+    { type: 'dialogue', speaker: 'LEA', text: 'Wenn ihr fertig seid mit Werbung machen – die Bühne ist in zwanzig Minuten frei für den zweiten Akt.', page: 1, scene: 'Backstage' },
+    { type: 'dialogue', speaker: 'MARA', text: 'Wir üben ja schon, Lea. Setz dich, du kannst gleich mitspielen.', page: 1, scene: 'Backstage' },
+    { type: 'dialogue', speaker: 'LEA', text: 'Ich hab genug zu tun. Fünf Minuten.', page: 1, scene: 'Backstage', inline_directions: [{ after_word_index: 4, text: 'setzt sich trotzdem' }] },
+    { type: 'dialogue', speaker: 'JONAS', text: 'Und wenn ich nur eine Szene üben will, nicht das ganze Stück?', page: 2, scene: 'Backstage' },
+    { type: 'dialogue', speaker: 'MARA', text: 'Dann wählst du bei «Was möchtest du üben?» einfach die Szene oder die Seiten aus, die dran sind. Du musst nicht jedes Mal von vorne anfangen – du kannst sogar mittendrin starten, falls du nur den Schluss nochmal brauchst.', page: 2, scene: 'Backstage' },
+    { type: 'dialogue', speaker: 'JONAS', text: 'Und die anderen Rollen? Wer spricht die, wenn ich allein zu Hause übe?', page: 2, scene: 'Backstage' },
+    { type: 'dialogue', speaker: 'MARA', text: 'Die App. Sie liest dir die fremden Zeilen vor, bevor du dran bist. Der Stichwort-Modus ist schon voreingestellt: du hörst den letzten Satz vor deiner Zeile. Wer mehr will, wählt das ausführliche Stichwort – die ganze letzte Fremd-Zeile – oder gleich den kompletten Dialog.', page: 2, scene: 'Backstage' },
+    { type: 'dialogue', speaker: 'LEA', text: 'Ich mag das Stichwort. Realistischer. Auf der Bühne flüstert dir auch keiner den ganzen Text vor.', page: 2, scene: 'Backstage' },
+    { type: 'dialogue', speaker: 'MARA', text: 'Genau. Und du kannst einstellen, ob deine eigene Zeile eingeblendet wird, während du sie sprichst, oder ob der Bildschirm leer bleibt – für alle, die es wirklich auswendig können wollen.', page: 2, scene: 'Backstage' },
+    { type: 'dialogue', speaker: 'JONAS', text: 'Leer bleibt. Klingt beängstigend.', page: 2, scene: 'Backstage' },
+    { type: 'dialogue', speaker: 'MARA', text: 'Dafür gibt es einen Knopf: «Text trotzdem zeigen». Kein Beinbruch.', page: 2, scene: 'Backstage' },
+    { type: 'dialogue', speaker: 'LEA', text: 'Und wenn er wirklich hängt?', page: 2, scene: 'Backstage' },
+    { type: 'dialogue', speaker: 'MARA', text: 'Dann hört die App zu. Sag deinen Satz. Das Mikrofon läuft.', page: 2, scene: 'Backstage', inline_directions: [{ after_word_index: 5, text: 'hält Jonas das Tablet hin' }] },
+    { type: 'stage_direction', text: 'JONAS steht auf, räuspert sich, spricht unsicher.', page: 2, scene: 'Backstage' },
+    { type: 'dialogue', speaker: 'JONAS', text: 'Ich habe die Nacht nicht durchgestanden, um jetzt aufzugeben.', page: 2, scene: 'Backstage' },
+    { type: 'dialogue', speaker: 'MARA', text: 'Siehst du? Richtig. Die App vergleicht, was du sagst, mit dem Originaltext. Dafür gibt es drei Genauigkeits-Stufen: Locker meckert nur, wenn du komplett daneben liegst. Ausgewogen ist voreingestellt – kleine Abweichungen wie «der» statt «die» sind ok. Und Strikt will jedes Wort exakt.', page: 2, scene: 'Backstage' },
+    { type: 'dialogue', speaker: 'LEA', text: 'Ich stelle bei mir immer Strikt ein. Premiere ist Premiere.', page: 2, scene: 'Backstage' },
+    { type: 'dialogue', speaker: 'JONAS', text: 'Und wenn ich es falsch sage?', page: 3, scene: 'Backstage' },
+    { type: 'dialogue', speaker: 'MARA', text: 'Kommt drauf an, was du eingestellt hast. Im Modus «Fehler anzeigen» sagt die Stimme «Falsch» und springt zur betreffenden Stelle zurück, damit du es noch mal versuchst. Im Modus «Fehler korrigieren» sagt sie dir sogar das richtige Wort vor: sagst du «rot» statt «blau», hörst du «blau» und beginnst nochmal von vorn – und falls dein Text angezeigt wird, leuchtet die falsche Stelle rot. Und wer einfach nur durchlaufen will, wählt «Frei durch» – da gibt es erst am Ende eine Zusammenfassung.', page: 3, scene: 'Backstage' },
+    { type: 'dialogue', speaker: 'JONAS', text: 'Und wenn ich dreimal hintereinander scheitere?', page: 3, scene: 'Backstage' },
+    { type: 'dialogue', speaker: 'MARA', text: 'Dann fragt sie dich freundlich, ob du den Text sehen, es noch mal versuchen oder die Zeile überspringen willst. Sie lässt dich nicht hängen.', page: 3, scene: 'Backstage' },
+    { type: 'dialogue', speaker: 'LEA', text: 'Rührend. Aber in zwanzig Minuten ist trotzdem Bühnenprobe, App hin oder her.', page: 3, scene: 'Backstage', inline_directions: [{ after_word_index: 0, text: 'steht auf' }] },
+    { type: 'dialogue', speaker: 'JONAS', text: 'Eine Frage noch. Bei langen Monologen – muss ich da wirklich nach jedem einzelnen Satz stoppen und warten?', page: 3, scene: 'Backstage' },
+    { type: 'dialogue', speaker: 'MARA', text: 'Nein. Es gibt einen Regler für die Abfrageeinheit. Auf eins fragt sie dich Satz für Satz ab – gut für Dialogszenen wie unsere, und so ist es auch voreingestellt. Höher gestellt, bis zu zehn, fragt sie ganze Blöcke ab – ideal für deinen Monolog, Jonas.', page: 3, scene: 'Backstage' },
+    { type: 'dialogue', speaker: 'JONAS', text: 'Also stelle ich den hoch.', page: 3, scene: 'Backstage' },
+    { type: 'dialogue', speaker: 'MARA', text: 'Genau. Und wenn du Regieanweisungen wie «geht langsam zur Tür» nicht hören willst, kannst du die auch ausblenden. Nur der reine Text bleibt übrig.', page: 3, scene: 'Backstage' },
+    { type: 'dialogue', speaker: 'LEA', text: 'Und am Ende?', page: 3, scene: 'Backstage' },
+    { type: 'dialogue', speaker: 'MARA', text: 'Am Ende zeigt sie dir eine Zusammenfassung. Wie viele Zeilen du gesprochen hast, wie viele richtig, wie viele daneben, und deine Trefferquote in Prozent.', page: 3, scene: 'Backstage' },
+    { type: 'dialogue', speaker: 'JONAS', text: 'Also wie eine Schulnote, nur ohne Lehrer.', page: 3, scene: 'Backstage' },
+    { type: 'dialogue', speaker: 'LEA', text: 'Klingt gefährlich ehrlich.', page: 3, scene: 'Backstage' },
+    { type: 'dialogue', speaker: 'MARA', text: 'Ist es auch. Aber genau deshalb hilft es.', page: 3, scene: 'Backstage' },
+    { type: 'stage_direction', text: 'LEA steht auf, klemmt das Klemmbrett unter den Arm.', page: 3, scene: 'Backstage' },
+    { type: 'dialogue', speaker: 'LEA', text: 'Gut. Zwanzig Minuten, Jonas. Und wehe, du stehst dann immer noch mit dem Tablet in der Hand auf der Bühne.', page: 3, scene: 'Backstage' },
+    { type: 'dialogue', speaker: 'JONAS', text: 'Keine Sorge. Ich glaube, ich probiere es gleich noch mal – diesmal ohne Text auf dem Bildschirm.', page: 3, scene: 'Backstage' },
+    { type: 'dialogue', speaker: 'MARA', text: 'Dann leg los. Ich höre zu.', page: 3, scene: 'Backstage', inline_directions: [{ after_word_index: 0, text: 'lächelt, tritt zur Seite' }] },
+    { type: 'stage_direction', text: 'JONAS holt tief Luft. Licht wird gedämpft. Vorhang.', page: 3, scene: 'Backstage' }
+  ]
+};
+
+function startTutorial() {
+  track('tutorial_gestartet');
+  selectedFile = { name: TUTORIAL_PROJECT.fileName, size: 0 };
+  analysisResult = {
+    scene_heading: TUTORIAL_PROJECT.scene_heading,
+    speakers_detected: TUTORIAL_PROJECT.speakers_detected,
+    entries: TUTORIAL_PROJECT.entries
+  };
+  document.getElementById('backToRolesBtn').style.display = 'block';
+  showRoleSelection();
+  goTo(2);
+}
+
+// ============================================================
+// FAKE-DOOR: Klick auf "eigenes Skript" → Preis-Gate, solange kein
+// Gutschein eingelöst wurde.
+// ============================================================
+function handleOwnScriptClick() {
+  track('eigenes_skript_upload_versucht');
+  if (hasActiveUnlock()) {
+    document.getElementById('fileInput').click();
+    return;
+  }
+  showPriceOverlay();
+}
+
+function showPriceOverlay() {
+  document.getElementById('priceDisplay').textContent =
+    FAKE_DOOR_CONFIG.prices[PRICE_VARIANT] + ' pro Skript';
+  document.getElementById('priceOverlay').style.display = 'flex';
+  track('preis_angezeigt', { variant: PRICE_VARIANT, price: FAKE_DOOR_CONFIG.prices[PRICE_VARIANT] });
+}
+
+function closeOverlay(id) {
+  document.getElementById(id).style.display = 'none';
+}
+
+function openEmailOverlay() {
+  closeOverlay('priceOverlay');
+  track('kaufen_geklickt', { variant: PRICE_VARIANT });
+  document.getElementById('emailError').textContent = '';
+  document.getElementById('emailOverlay').style.display = 'flex';
+}
+
+let lastIssuedVoucher = null;
+
+async function submitPurchaseEmail() {
+  const email = document.getElementById('purchaseEmail').value.trim().toLowerCase();
+  const consent = document.getElementById('consentCheckbox').checked;
+  const notify = document.getElementById('notifyCheckbox').checked;
+  const errEl = document.getElementById('emailError');
+  const btn = document.getElementById('emailSubmitBtn');
+
+  if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) {
+    errEl.textContent = 'Bitte eine gültige E-Mail-Adresse eingeben.';
+    return;
+  }
+  if (!consent) {
+    errEl.textContent = 'Bitte der Datenverarbeitung zustimmen, um fortzufahren.';
+    return;
+  }
+
+  btn.disabled = true;
+  errEl.textContent = '';
+  track('email_erfasst', { notify_opt_in: notify });
+  if (notify) track('launch_benachrichtigung_opt_in');
+
+  try {
+    const res = await fetch('/api/voucher', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'create', email, notify_opt_in: notify, session_id: SESSION_ID })
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || 'Unbekannter Fehler');
+
+    lastIssuedVoucher = { code: data.code, email };
+    closeOverlay('emailOverlay');
+    document.getElementById('voucherCodeBox').textContent = data.code;
+    document.getElementById('voucherExpiryNote').textContent =
+      'Gültig bis ' + (data.expires_display || FAKE_DOOR_CONFIG.voucherExpiryDisplay) +
+      '. Du kannst ihn jetzt gleich einlösen oder später über «Ich habe einen Gutscheincode».';
+    document.getElementById('voucherOverlay').style.display = 'flex';
+    track('absage_nachricht_angezeigt');
+    track('gutschein_angezeigt');
+  } catch (err) {
+    errEl.textContent = 'Fehler: ' + err.message;
+  } finally {
+    btn.disabled = false;
+  }
+}
+
+function redeemFromVoucherOverlay() {
+  closeOverlay('voucherOverlay');
+  openRedeemOverlay();
+  if (lastIssuedVoucher) {
+    document.getElementById('redeemCode').value = lastIssuedVoucher.code;
+    document.getElementById('redeemEmail').value = lastIssuedVoucher.email;
+  }
+}
+
+function openRedeemOverlay() {
+  closeOverlay('priceOverlay');
+  document.getElementById('redeemError').textContent = '';
+  document.getElementById('redeemOverlay').style.display = 'flex';
+}
+
+async function submitRedeem() {
+  const code = document.getElementById('redeemCode').value.trim().toUpperCase();
+  const email = document.getElementById('redeemEmail').value.trim().toLowerCase();
+  const errEl = document.getElementById('redeemError');
+  const btn = document.getElementById('redeemBtn');
+
+  if (!code || !email) {
+    errEl.textContent = 'Bitte Code und E-Mail-Adresse angeben.';
+    return;
+  }
+
+  btn.disabled = true;
+  errEl.textContent = '';
+  try {
+    const res = await fetch('/api/voucher', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'redeem', code, email, session_id: SESSION_ID })
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || 'Unbekannter Fehler');
+
+    setUnlockState({ email, code, redeemedAt: new Date().toISOString(), used: false });
+    track('gutschein_eingeloest');
+    closeOverlay('redeemOverlay');
+    const statusEl = document.getElementById('statusLine');
+    statusEl.className = 'status-line success';
+    statusEl.textContent = 'Gutschein eingelöst — du kannst jetzt ein eigenes Skript hochladen und analysieren.';
+  } catch (err) {
+    errEl.textContent = 'Fehler: ' + err.message;
+  } finally {
+    btn.disabled = false;
+  }
+}
+
 // --- Beta-Limit: max. Seitenzahl pro Skript, um Token-Kosten während der Testphase zu begrenzen. ---
 // Später (Phase 5/Monetarisierung) wird dieses Limit an ein Guthaben/Zahlung gekoppelt statt fix zu sein.
-const MAX_PAGES = 10;
+const MAX_PAGES = 15;
 
 let selectedFile = null;
 let analysisResult = null;
 let selectedRoles = new Set();
-let selectedMode = null;
+let selectedMode = 'cue'; // Stichwort ist vorausgewählt (Beta-Feedback #5)
 let practiceIndex = 0; // Index in entries[], wo wir aktuell stehen
 
 function goTo(step) {
@@ -1090,6 +1648,14 @@ async function analyze() {
   const statusEl = document.getElementById('statusLine');
   const btn = document.getElementById('analyzeBtn');
 
+  // Fake-Door: Analyse eigener Skripte nur mit eingelöstem Gutschein.
+  // (Serverseitige Durchsetzung folgt mit der profiles-Tabelle; für den
+  // Soft-Launch-Test reicht das clientseitige Gate + MAX_PAGES-Limit.)
+  if (!hasActiveUnlock()) {
+    showPriceOverlay();
+    return;
+  }
+
   btn.disabled = true;
   statusEl.className = 'status-line';
   statusEl.innerHTML = '<span class="spinner"></span>Lese PDF...';
@@ -1113,6 +1679,15 @@ async function analyze() {
     statusEl.textContent = 'Fertig — ' + analysisResult.speakers_detected.length + ' Rollen erkannt.';
 
     saveAnalysisToStorage(selectedFile, analysisResult, pages.length);
+
+    // Gutschein gilt für EIN Skript: nach erfolgreicher Analyse als
+    // verbraucht markieren. Das gespeicherte Projekt bleibt nutzbar.
+    track('skript_freigeschaltet_genutzt', { pages: pages.length });
+    const unlock = getUnlockState();
+    if (unlock && !unlock.used) {
+      unlock.used = true;
+      setUnlockState(unlock);
+    }
 
     document.getElementById('backToRolesBtn').style.display = 'block';
     showRoleSelection();
@@ -1165,10 +1740,11 @@ let selectedScenes = new Set();
 let selectedPages = new Set();
 let showOwnText = false;
 let showDirections = true;
-let feedbackMode = 'retry'; // 'silent' | 'retry' | 'continue'
+let feedbackMode = 'show'; // 'silent' (Frei durch) | 'correct' (Fehler korrigieren) | 'show' (Fehler anzeigen)
 let autoPlayForeign = true;
-let strictness = 25; // 0 = lose, 100 = strikt
+let accuracyMode = 'ausgewogen'; // 'locker' | 'ausgewogen' | 'strikt' (Beta-Feedback #7)
 let chunkSize = 1; // 1 = Satz für Satz, 10 = viele Sätze am Stück
+let sentenceOffset = 0; // Bug-Fix #6: Satz-Position INNERHALB der aktuellen eigenen Zeile
 let attemptCount = 0;
 let sessionStats = { correct: 0, wrong: 0, total: 0 };
 let recognition = null;
@@ -1309,43 +1885,73 @@ function selectFeedbackMode(mode) {
   document.querySelector(`.mode-card[data-feedback="${mode}"]`).classList.add('selected');
 }
 
-function updateStrictnessLabel(value) {
-  strictness = parseInt(value, 10);
-  let label;
-  if (strictness < 30) label = 'locker';
-  else if (strictness < 70) label = 'ausgewogen';
-  else label = 'strikt';
-  document.getElementById('strictnessLabel').textContent = 'Genauigkeit: ' + label;
+// Beta-Feedback #7: drei feste Genauigkeits-Modi statt Schieberegler
+function selectAccuracy(mode) {
+  accuracyMode = mode;
+  document.querySelectorAll('.chip[data-accuracy]').forEach(c => c.classList.remove('selected'));
+  document.querySelector(`.chip[data-accuracy="${mode}"]`).classList.add('selected');
+  const hints = {
+    locker: 'Nur korrigieren, wenn der Text komplett falsch ist.',
+    ausgewogen: 'Kleine Abweichungen sind ok (z.B. «der» statt «die»).',
+    strikt: 'Wort für Wort muss exakt stimmen.'
+  };
+  document.getElementById('accuracyHint').textContent = hints[mode];
 }
 
-// Sammelt bis zu chunkSize Sätze aus eigenen aufeinanderfolgenden Zeilen.
-// Damit wird die "Abfrageeinheit" gesteuert: chunkSize=1 gibt einen Satz,
-// chunkSize=10 gibt viele Sätze am Stück.
-function buildChunk(entries, fromIndex) {
-  if (chunkSize === 1) {
-    // Einzelsatz-Modus: nur die aktuelle Zeile
-    return entries[fromIndex].text;
-  }
+// Zerlegt einen Text in Sätze. Bug-Fix #6: Diese Funktion ist jetzt die
+// EINZIGE Stelle, an der Sätze erkannt werden — vorher lieferte
+// Abfrageeinheit "1 Satz" bei mehrsätzigen Zeilen die GANZE Zeile.
+// Erkennt . ! ? und … als Satzenden, inkl. nachfolgender Anführungszeichen.
+function splitSentences(text) {
+  const matches = text.match(/[^.!?…]+[.!?…]+[»"'"\)\]]*\s*|[^.!?…]+$/g);
+  const sents = (matches || [text]).map(s => s.trim()).filter(Boolean);
+  return sents.length ? sents : [text];
+}
 
+// Sammelt ab Position (fromIndex, fromOffset) genau chunkSize Sätze aus
+// eigenen aufeinanderfolgenden Zeilen. fromOffset = Satz-Index INNERHALB
+// der Zeile bei fromIndex. Gibt Text UND die Folgeposition zurück, damit
+// buildChunk und advancePastChunk garantiert dieselbe Aufteilung nutzen.
+function computeChunk(entries, fromIndex, fromOffset) {
   let sentenceCount = 0;
   let result = '';
   let i = fromIndex;
+  let offset = fromOffset || 0;
 
   while (i < entries.length && sentenceCount < chunkSize) {
     const e = entries[i];
-    if (e.type === 'stage_direction') { i++; continue; }
+    if (e.type === 'stage_direction') {
+      if (offset > 0) break; // sollte nicht vorkommen, aber sicher ist sicher
+      i++;
+      continue;
+    }
     if (!isYourLine(e)) break; // Fremd-Zeile → Block endet hier
 
-    // Sätze dieser Zeile zählen und anhängen
-    const sents = e.text.match(/[^.!?]+[.!?]*/g) || [e.text];
-    for (const s of sents) {
-      if (sentenceCount >= chunkSize) break;
-      result += (result ? ' ' : '') + s.trim();
+    const sents = splitSentences(e.text);
+    while (offset < sents.length && sentenceCount < chunkSize) {
+      result += (result ? ' ' : '') + sents[offset];
       sentenceCount++;
+      offset++;
     }
-    i++;
+    if (offset >= sents.length) {
+      // Zeile vollständig konsumiert → nächste Zeile, Satz-Zähler zurück
+      i++;
+      offset = 0;
+    } else {
+      // chunkSize erreicht, mitten in der Zeile → Position merken
+      break;
+    }
   }
-  return result || entries[fromIndex].text;
+
+  return {
+    text: result || (entries[fromIndex] ? entries[fromIndex].text : ''),
+    nextIndex: i,
+    nextOffset: offset
+  };
+}
+
+function buildChunk(entries, fromIndex) {
+  return computeChunk(entries, fromIndex, sentenceOffset).text;
 }
 
 function updateChunkLabel(value) {
@@ -1361,6 +1967,7 @@ function updateChunkLabel(value) {
 function startPractice() {
   const startVal = parseInt(document.getElementById('startPointSelect').value, 10);
   practiceIndex = startVal || 0;
+  sentenceOffset = 0;
   attemptCount = 0;
   sessionStats = { correct: 0, wrong: 0, total: 0 };
   const modeLabels = { full: 'Komplett', cue: 'Stichwort', cue_full: 'Ausführliches Stichwort' };
@@ -1480,6 +2087,7 @@ function playCurrentLine() {
   document.getElementById('playBtn').disabled = true;
   speakQueue(queue, 0, () => {
     practiceIndex = nextIndex;
+    sentenceOffset = 0;
     renderCurrentLine();
   });
 }
@@ -1498,6 +2106,7 @@ function stepLine(direction) {
   let newIndex = practiceIndex + direction;
   newIndex = Math.max(0, Math.min(entries.length, newIndex));
   practiceIndex = newIndex;
+  sentenceOffset = 0;
   speechSynthesis.cancel();
   stopListening();
   renderCurrentLine();
@@ -1507,87 +2116,215 @@ function stepLine(direction) {
 
 const SpeechRecognitionAPI = window.SpeechRecognition || window.webkitSpeechRecognition;
 
+// Beta-Feedback #4: Der Mikrofon-Status ist jetzt IMMER sichtbar (fixe
+// Leiste über den Buttons). Bricht die Erkennung ab (Display-Sperre,
+// Browser-Timeout, Fehler), erscheint ein Button zum Wieder-Zuhören.
+let lastExpectedEntry = null;      // damit "Wieder zuhören" weiss, was erwartet wird
+let expectingListening = false;    // true, solange wir eigentlich zuhören SOLLTEN
+let resultHandled = false;         // true, sobald onresult gefeuert hat
+
+function setMicState(state, message) {
+  const bar = document.getElementById('micBar');
+  const content = document.getElementById('micBarContent');
+  if (!bar) return;
+  if (state === 'listening') {
+    bar.className = 'mic-bar listening';
+    content.innerHTML = '<span style="display:inline-flex;align-items:center;gap:8px;"><span class="mic-dot"></span>' + (message || 'Mikrofon an — höre zu…') + '</span>';
+  } else if (state === 'stopped') {
+    bar.className = 'mic-bar idle';
+    content.innerHTML = '<button class="mic-restart-btn" onclick="restartListening()">🎤 ' + (message || 'Mikrofon aus — tippen zum Wieder-Zuhören') + '</button>';
+  } else {
+    // 'off': gerade keine eigene Zeile dran, Mikrofon bewusst aus
+    bar.className = 'mic-bar idle';
+    content.textContent = message || '';
+  }
+}
+
+function restartListening() {
+  if (lastExpectedEntry) {
+    startListening(lastExpectedEntry);
+  }
+}
+
 function startListening(expectedEntry) {
   if (!SpeechRecognitionAPI) {
-    document.getElementById('micStatusText').textContent = 'Spracherkennung wird von diesem Browser nicht unterstützt — bitte Chrome verwenden, oder Text eintippen.';
-    document.getElementById('micIndicator').style.display = 'flex';
+    setMicState('off', 'Spracherkennung nicht unterstützt — bitte Chrome verwenden.');
     return;
   }
+
+  // Alte Instanz sauber beenden, ohne den Status auf "aus" zu setzen
+  if (recognition) {
+    recognition.onend = null;
+    try { recognition.stop(); } catch (e) {}
+  }
+
+  lastExpectedEntry = expectedEntry;
+  expectingListening = true;
+  resultHandled = false;
 
   recognition = new SpeechRecognitionAPI();
   recognition.lang = 'de-DE';
   recognition.interimResults = false;
   recognition.maxAlternatives = 1;
 
-  document.getElementById('micIndicator').style.display = 'flex';
-  document.getElementById('micStatusText').textContent = 'Höre zu…';
+  setMicState('listening');
 
   recognition.onresult = (event) => {
+    resultHandled = true;
+    expectingListening = false;
     const spoken = event.results[0][0].transcript;
     handleSpokenResult(spoken, expectedEntry);
   };
 
   recognition.onerror = (event) => {
-    document.getElementById('micStatusText').textContent = 'Mikrofon-Fehler: ' + event.error + ' — nochmal versuchen oder Text eintippen.';
+    if (event.error === 'no-speech' || event.error === 'aborted') return; // onend übernimmt
+    expectingListening = false;
+    setMicState('stopped', 'Mikrofon-Fehler (' + event.error + ') — tippen zum Wieder-Zuhören');
   };
 
+  // Chrome beendet die Erkennung nach Stille / Display-Sperre von selbst.
+  // Wenn das passiert, OHNE dass ein Ergebnis kam, deutlich anzeigen +
+  // Reaktivierungs-Button anbieten statt stumm "einzufrieren".
   recognition.onend = () => {
-    document.getElementById('micIndicator').style.display = 'none';
+    if (expectingListening && !resultHandled) {
+      setMicState('stopped');
+    }
   };
 
   try {
     recognition.start();
   } catch (e) {
     console.error('Mikrofon konnte nicht gestartet werden:', e);
+    setMicState('stopped', 'Mikrofon konnte nicht starten — tippen zum Versuchen');
   }
 }
 
 function stopListening() {
+  expectingListening = false;
   if (recognition) {
+    recognition.onend = null;
     try { recognition.stop(); } catch (e) {}
     recognition = null;
   }
-  document.getElementById('micIndicator').style.display = 'none';
+  setMicState('off');
 }
 
-// Vergleicht den gesprochenen Text mit dem erwarteten Text, abhängig vom
-// Strenge-Regler (0 = lose, 100 = strikt). Gibt {isCorrect, similarity} zurück.
-function compareSpoken(spoken, expected) {
-  const normalize = (s) => s.toLowerCase()
-    .replace(/[.,!?;:„""«»\-]/g, '')
+// ---------- Textvergleich (Beta-Feedback #7: drei feste Modi) ----------
+
+function normalizeForCompare(s) {
+  return s.toLowerCase()
+    .replace(/[.,!?;:…„""«»\-–—'']/g, ' ')
     .replace(/\s+/g, ' ')
     .trim();
-
-  const spokenNorm = normalize(spoken);
-  const expectedNorm = normalize(expected);
-
-  if (spokenNorm === expectedNorm) return { isCorrect: true, similarity: 1 };
-
-  const spokenWords = spokenNorm.split(' ').filter(Boolean);
-  const expectedWords = expectedNorm.split(' ').filter(Boolean);
-
-  const expectedSet = new Set(expectedWords);
-  const spokenSet = new Set(spokenWords);
-
-  // recall: wie viele erwartete Wörter wurden getroffen (Stichwörter da?)
-  let matchCount = 0;
-  expectedSet.forEach(w => { if (spokenSet.has(w)) matchCount++; });
-  const recall = expectedSet.size > 0 ? matchCount / expectedSet.size : 0;
-
-  // precision: wie viele gesprochene Wörter waren NICHT erwartet (Füllwörter/Fehler)
-  let extraCount = 0;
-  spokenSet.forEach(w => { if (!expectedSet.has(w)) extraCount++; });
-  const precision = spokenSet.size > 0 ? 1 - (extraCount / spokenSet.size) : 1;
-
-  // Bei "lose" zählt nur recall (Stichwörter getroffen, Füllwörter egal).
-  // Bei "strikt" fließt precision stark mit ein (keine überflüssigen Wörter).
-  const precisionWeight = strictness / 100;
-  const similarity = recall * (1 - precisionWeight) + Math.min(recall, precision) * precisionWeight;
-
-  const threshold = 0.4 + (strictness / 100) * 0.5; // 0.4 (lose) bis 0.9 (strikt)
-  return { isCorrect: similarity >= threshold, similarity };
 }
 
+// Zeichen-Levenshtein für den Fuzzy-Wortvergleich ("der" vs "die" etc.)
+function levenshtein(a, b) {
+  const m = a.length, n = b.length;
+  if (m === 0) return n;
+  if (n === 0) return m;
+  let prev = Array.from({ length: n + 1 }, (_, j) => j);
+  for (let i = 1; i <= m; i++) {
+    const cur = [i];
+    for (let j = 1; j <= n; j++) {
+      cur[j] = Math.min(
+        prev[j] + 1,
+        cur[j - 1] + 1,
+        prev[j - 1] + (a[i - 1] === b[j - 1] ? 0 : 1)
+      );
+    }
+    prev = cur;
+  }
+  return prev[n];
+}
+
+// Zwei Wörter gelten als "kleine Abweichung", wenn sie sich um höchstens
+// 1 Zeichen unterscheiden (bei kurzen Wörtern) bzw. ~25% (bei langen).
+function wordsRoughlyEqual(a, b) {
+  if (a === b) return true;
+  const maxDist = Math.max(1, Math.floor(Math.max(a.length, b.length) * 0.25));
+  return levenshtein(a, b) <= maxDist;
+}
+
+// Vergleicht gesprochenen mit erwartetem Text.
+// Gibt {isCorrect, similarity, firstWrongWordIndex, expectedWords} zurück:
+// firstWrongWordIndex = Index des ersten abweichenden ERWARTETEN Wortes
+// (für "Fehler korrigieren": Wort vorsprechen + rot markieren), -1 wenn keins.
+function compareSpoken(spoken, expected) {
+  const spokenWords = normalizeForCompare(spoken).split(' ').filter(Boolean);
+  const expectedWordsNorm = normalizeForCompare(expected).split(' ').filter(Boolean);
+  const expectedWordsOriginal = expected.split(/\s+/).filter(Boolean);
+
+  // Wortweise Ausrichtung: für jedes erwartete Wort prüfen, ob es an
+  // ungefähr derselben Stelle (±2 Wörter Toleranz) gesprochen wurde.
+  let matches = 0;
+  let firstWrongWordIndex = -1;
+  let sPos = 0;
+  for (let e = 0; e < expectedWordsNorm.length; e++) {
+    let found = -1;
+    for (let s = Math.max(0, sPos - 1); s < Math.min(spokenWords.length, sPos + 3); s++) {
+      if (wordsRoughlyEqual(expectedWordsNorm[e], spokenWords[s])) { found = s; break; }
+    }
+    if (found >= 0) {
+      matches++;
+      sPos = found + 1;
+    } else if (firstWrongWordIndex === -1) {
+      firstWrongWordIndex = e;
+    }
+  }
+
+  const similarity = expectedWordsNorm.length > 0 ? matches / expectedWordsNorm.length : 0;
+
+  let isCorrect;
+  if (accuracyMode === 'strikt') {
+    // Wort für Wort exakt: gleiche Anzahl, jedes Wort identisch (normalisiert)
+    isCorrect = spokenWords.length === expectedWordsNorm.length &&
+      expectedWordsNorm.every((w, i) => w === spokenWords[i]);
+    if (isCorrect) firstWrongWordIndex = -1;
+    else if (firstWrongWordIndex === -1) {
+      // exakter Vergleich schlug fehl, Fuzzy fand aber alles → erstes
+      // nicht-identische Wort suchen
+      firstWrongWordIndex = expectedWordsNorm.findIndex((w, i) => w !== spokenWords[i]);
+      if (firstWrongWordIndex === -1) firstWrongWordIndex = Math.min(spokenWords.length, expectedWordsNorm.length - 1);
+    }
+  } else if (accuracyMode === 'ausgewogen') {
+    // Kleine Abweichungen ok
+    isCorrect = similarity >= 0.75;
+  } else {
+    // locker: nur korrigieren, wenn komplett falsch
+    isCorrect = similarity >= 0.35;
+  }
+
+  return { isCorrect, similarity, firstWrongWordIndex, expectedWordsOriginal };
+}
+
+// Spricht einen kurzen Text (z.B. "Falsch" oder das Korrektur-Wort) und
+// ruft danach onDone auf.
+function speakShort(text, onDone) {
+  const utter = new SpeechSynthesisUtterance(text);
+  utter.lang = 'de-DE';
+  utter.onend = () => { if (onDone) onDone(); };
+  utter.onerror = () => { if (onDone) onDone(); };
+  speechSynthesis.speak(utter);
+}
+
+// Markiert bei angezeigtem eigenem Text die falsche Stelle rot
+// (Modus "Fehler korrigieren", Beta-Feedback #8).
+function highlightWrongWord(chunkText, wrongWordIndex) {
+  const words = chunkText.split(/\s+/).filter(Boolean);
+  const html = words.map((w, i) => {
+    const safe = w.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+    return i === wrongWordIndex ? '<span class="wrong-word">' + safe + '</span>' : safe;
+  }).join(' ');
+  document.getElementById('lineText').innerHTML = html;
+}
+
+// Beta-Feedback #8: neue Feedback-Modi
+// - silent  ("Frei durch"):        weiter ohne Korrektur
+// - correct ("Fehler korrigieren"): richtiges Wort wird vorgesprochen,
+//                                   zurück an den Anfang des Chunks,
+//                                   falsche Stelle rot (falls Text sichtbar)
+// - show    ("Fehler anzeigen"):    Stimme sagt "Falsch", zurück zur Stelle
 function handleSpokenResult(spoken, expectedEntry) {
   const result = compareSpoken(spoken, expectedEntry.text);
   sessionStats.total++;
@@ -1609,37 +2346,46 @@ function handleSpokenResult(spoken, expectedEntry) {
     return;
   }
 
-  if (feedbackMode === 'continue') {
-    showFeedback(false);
-    setTimeout(() => { advancePastChunk(); renderCurrentLine(); }, 1100);
+  // Beide korrigierenden Modi: nach 3 Fehlversuchen das Hilfe-Overlay zeigen
+  const retryOrOverlay = () => {
+    if (attemptCount >= 3) {
+      showStuckOverlay();
+    } else {
+      startListening(expectedEntry);
+    }
+  };
+
+  showFeedback(false);
+
+  if (feedbackMode === 'correct') {
+    // Das richtige Wort automatisch vorsprechen, dann von vorne beginnen.
+    const idx = result.firstWrongWordIndex;
+    const chunkWords = expectedEntry.text.split(/\s+/).filter(Boolean);
+    const correctionWord = (idx >= 0 && idx < chunkWords.length) ? chunkWords[idx] : null;
+
+    if (showOwnText && idx >= 0) {
+      highlightWrongWord(expectedEntry.text, idx);
+    }
+
+    if (correctionWord) {
+      setTimeout(() => speakShort(correctionWord, () => setTimeout(retryOrOverlay, 400)), 500);
+    } else {
+      setTimeout(retryOrOverlay, 900);
+    }
     return;
   }
 
-  // feedbackMode === 'retry'
-  showFeedback(false);
-  if (attemptCount >= 3) {
-    setTimeout(() => showStuckOverlay(), 600);
-  } else {
-    setTimeout(() => startListening(expectedEntry), 1000);
-  }
+  // feedbackMode === 'show': "Falsch" ansagen und zur Stelle zurückspringen
+  setTimeout(() => speakShort('Falsch', () => setTimeout(retryOrOverlay, 300)), 400);
 }
 
-// Rückt practiceIndex so weit vor, dass der gesamte abgefragte Chunk übersprungen wird.
+// Rückt den Cursor (practiceIndex + sentenceOffset) hinter den soeben
+// abgefragten Chunk — nutzt exakt dieselbe Aufteilung wie buildChunk.
 function advancePastChunk() {
   const entries = getActiveEntries();
-  if (chunkSize === 1) {
-    practiceIndex++;
-    return;
-  }
-  let sentenceCount = 0;
-  while (practiceIndex < entries.length && sentenceCount < chunkSize) {
-    const e = entries[practiceIndex];
-    if (e.type === 'stage_direction') { practiceIndex++; continue; }
-    if (!isYourLine(e)) break;
-    const sents = e.text.match(/[^.!?]+[.!?]*/g) || [e.text];
-    sentenceCount += sents.length;
-    practiceIndex++;
-  }
+  const { nextIndex, nextOffset } = computeChunk(entries, practiceIndex, sentenceOffset);
+  practiceIndex = nextIndex;
+  sentenceOffset = nextOffset;
 }
 
 function showFeedback(isCorrect) {
@@ -1660,17 +2406,20 @@ function showStuckOverlay() {
 function stuckChoice(choice) {
   document.getElementById('stuckOverlay').style.display = 'none';
   attemptCount = 0;
-  const entry = getActiveEntries()[practiceIndex];
+  const entries = getActiveEntries();
+  const entry = entries[practiceIndex];
+  const chunkText = buildChunk(entries, practiceIndex);
+  const chunkEntry = { ...entry, text: chunkText };
   if (choice === 'show') {
-    // Text sofort anzeigen
-    document.getElementById('lineText').textContent = entry.text;
+    // Text sofort anzeigen (den aktuell abgefragten Chunk, nicht die ganze Zeile)
+    document.getElementById('lineText').textContent = chunkText;
     document.getElementById('revealBtn').style.display = 'none';
     // Mikrofon kurz danach starten, damit User Zeit hat Text zu lesen
-    setTimeout(() => startListening(entry), 800);
+    setTimeout(() => startListening(chunkEntry), 800);
   } else if (choice === 'retry') {
-    startListening(entry);
+    startListening(chunkEntry);
   } else if (choice === 'skip') {
-    practiceIndex++;
+    advancePastChunk();
     renderCurrentLine();
   }
 }
@@ -1689,4 +2438,3 @@ function showSummary() {
 </script>
 </body>
 </html>
-
