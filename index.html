@@ -919,8 +919,9 @@ supabaseClient.auth.getSession().then(({ data }) => {
 // tief im Code angepasst werden können.
 // ============================================================
 const FAKE_DOOR_CONFIG = {
-  // A/B-Preisvarianten (Anzeige-Strings, frei anpassbar solange Pricing nicht final ist)
-  prices: { A: 'CHF 5.–', B: 'CHF 9.–' },
+  // Fester Testphasen-Preis (A/B-Mechanik bleibt im Code bestehen für später,
+  // zeigt aktuell aber beiden Gruppen denselben Preis).
+  prices: { A: 'CHF 5.–', B: 'CHF 5.–' },
   // Ende der Testphase = Ablaufdatum neuer Gutscheine (Anzeige; das
   // verbindliche Datum setzt der Server via VOUCHER_EXPIRES_AT).
   voucherExpiryDisplay: '31.08.2026'
