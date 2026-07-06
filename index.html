@@ -1740,6 +1740,11 @@ function showRoleSelection() {
 let selectedScenes = new Set();
 let selectedPages = new Set();
 let showOwnText = false;
+// Ist der eigene Text für die AKTUELLE Zeile gerade sichtbar? Wird true,
+// wenn entweder die Einstellung "Eigenen Text anzeigen" aktiv ist, ODER
+// wenn während der Probe auf "Text trotzdem zeigen" getippt wurde — in
+// beiden Fällen soll die rote Fehlermarkierung greifen (Bugfix Juli 2026).
+let ownTextRevealed = false;
 let showDirections = true;
 let feedbackMode = 'show'; // 'silent' (Frei durch) | 'correct' (Fehler korrigieren) | 'show' (Fehler anzeigen)
 let autoPlayForeign = true;
@@ -2048,6 +2053,7 @@ function renderCurrentLine() {
     const chunkText = buildChunk(entries, practiceIndex);
     document.getElementById('lineRole').textContent = entry.speaker + ' — DEINE ZEILE';
     document.getElementById('lineText').textContent = showOwnText ? chunkText : '🎤 jetzt sprechen';
+    ownTextRevealed = showOwnText;
     document.getElementById('playBtn').disabled = true;
     if (!showOwnText) document.getElementById('revealBtn').style.display = 'block';
     // Virtuellen Entry mit zusammengefasstem Text fürs Mikrofon erstellen
@@ -2078,6 +2084,7 @@ function revealOwnText() {
     const chunkText = buildChunk(entries, practiceIndex);
     document.getElementById('lineText').textContent = chunkText;
     document.getElementById('revealBtn').style.display = 'none';
+    ownTextRevealed = true;
   }
 }
 
@@ -2364,7 +2371,7 @@ function handleSpokenResult(spoken, expectedEntry) {
     const chunkWords = expectedEntry.text.split(/\s+/).filter(Boolean);
     const correctionWord = (idx >= 0 && idx < chunkWords.length) ? chunkWords[idx] : null;
 
-    if (showOwnText && idx >= 0) {
+    if (ownTextRevealed && idx >= 0) {
       highlightWrongWord(expectedEntry.text, idx);
     }
 
