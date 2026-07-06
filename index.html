@@ -2255,9 +2255,9 @@ function wordsRoughlyEqual(a, b) {
 }
 
 // Vergleicht gesprochenen mit erwartetem Text.
-// Gibt {isCorrect, similarity, firstWrongWordIndex, expectedWords} zurück:
-// firstWrongWordIndex = Index des ersten abweichenden ERWARTETEN Wortes
-// (für "Fehler korrigieren": Wort vorsprechen + rot markieren), -1 wenn keins.
+// Gibt {isCorrect, similarity, wrongWordIndices, expectedWordsOriginal} zurück:
+// wrongWordIndices = Indizes ALLER abweichenden ERWARTETEN Wörter, in
+// Reihenfolge (für "Fehler korrigieren": alle vorsprechen + rot markieren).
 function compareSpoken(spoken, expected) {
   const spokenWords = normalizeForCompare(spoken).split(' ').filter(Boolean);
   const expectedWordsNorm = normalizeForCompare(expected).split(' ').filter(Boolean);
@@ -2266,7 +2266,7 @@ function compareSpoken(spoken, expected) {
   // Wortweise Ausrichtung: für jedes erwartete Wort prüfen, ob es an
   // ungefähr derselben Stelle (±2 Wörter Toleranz) gesprochen wurde.
   let matches = 0;
-  let firstWrongWordIndex = -1;
+  let wrongWordIndices = [];
   let sPos = 0;
   for (let e = 0; e < expectedWordsNorm.length; e++) {
     let found = -1;
@@ -2276,8 +2276,8 @@ function compareSpoken(spoken, expected) {
     if (found >= 0) {
       matches++;
       sPos = found + 1;
-    } else if (firstWrongWordIndex === -1) {
-      firstWrongWordIndex = e;
+    } else {
+      wrongWordIndices.push(e);
     }
   }
 
@@ -2288,12 +2288,18 @@ function compareSpoken(spoken, expected) {
     // Wort für Wort exakt: gleiche Anzahl, jedes Wort identisch (normalisiert)
     isCorrect = spokenWords.length === expectedWordsNorm.length &&
       expectedWordsNorm.every((w, i) => w === spokenWords[i]);
-    if (isCorrect) firstWrongWordIndex = -1;
-    else if (firstWrongWordIndex === -1) {
-      // exakter Vergleich schlug fehl, Fuzzy fand aber alles → erstes
-      // nicht-identische Wort suchen
-      firstWrongWordIndex = expectedWordsNorm.findIndex((w, i) => w !== spokenWords[i]);
-      if (firstWrongWordIndex === -1) firstWrongWordIndex = Math.min(spokenWords.length, expectedWordsNorm.length - 1);
+    if (isCorrect) {
+      wrongWordIndices = [];
+    } else {
+      // Positionsgenau ALLE abweichenden/fehlenden Wörter markieren
+      wrongWordIndices = expectedWordsNorm
+        .map((w, i) => (i < spokenWords.length && w === spokenWords[i]) ? -1 : i)
+        .filter(i => i !== -1);
+      if (wrongWordIndices.length === 0) {
+        // Fuzzy fand alles, aber Länge/Reihenfolge stimmt nicht exakt
+        const fallbackIdx = Math.min(spokenWords.length, expectedWordsNorm.length - 1);
+        if (fallbackIdx >= 0) wrongWordIndices = [fallbackIdx];
+      }
     }
   } else if (accuracyMode === 'ausgewogen') {
     // Kleine Abweichungen ok
@@ -2303,7 +2309,9 @@ function compareSpoken(spoken, expected) {
     isCorrect = similarity >= 0.35;
   }
 
-  return { isCorrect, similarity, firstWrongWordIndex, expectedWordsOriginal };
+  if (isCorrect) wrongWordIndices = [];
+
+  return { isCorrect, similarity, wrongWordIndices, expectedWordsOriginal };
 }
 
 // Spricht einen kurzen Text (z.B. "Falsch" oder das Korrektur-Wort) und
@@ -2316,13 +2324,21 @@ function speakShort(text, onDone) {
   speechSynthesis.speak(utter);
 }
 
-// Markiert bei angezeigtem eigenem Text die falsche Stelle rot
-// (Modus "Fehler korrigieren", Beta-Feedback #8).
-function highlightWrongWord(chunkText, wrongWordIndex) {
+// Spricht mehrere Korrektur-Wörter nacheinander (mit kurzer Pause dazwischen),
+// z.B. wenn in einem Chunk mehrere Wörter falsch waren (Mehrfach-Update Juli 2026).
+function speakCorrections(words, i, onDone) {
+  if (i >= words.length) { if (onDone) onDone(); return; }
+  speakShort(words[i], () => setTimeout(() => speakCorrections(words, i + 1, onDone), 250));
+}
+
+// Markiert bei angezeigtem eigenem Text ALLE falschen Stellen rot
+// (Modus "Fehler korrigieren", Beta-Feedback #8 + Mehrfach-Update Juli 2026).
+function highlightWrongWord(chunkText, wrongWordIndices) {
+  const indices = Array.isArray(wrongWordIndices) ? wrongWordIndices : [wrongWordIndices];
   const words = chunkText.split(/\s+/).filter(Boolean);
   const html = words.map((w, i) => {
     const safe = w.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
-    return i === wrongWordIndex ? '<span class="wrong-word">' + safe + '</span>' : safe;
+    return indices.includes(i) ? '<span class="wrong-word">' + safe + '</span>' : safe;
   }).join(' ');
   document.getElementById('lineText').innerHTML = html;
 }
@@ -2366,17 +2382,17 @@ function handleSpokenResult(spoken, expectedEntry) {
   showFeedback(false);
 
   if (feedbackMode === 'correct') {
-    // Das richtige Wort automatisch vorsprechen, dann von vorne beginnen.
-    const idx = result.firstWrongWordIndex;
+    // Alle richtigen Wörter nacheinander vorsprechen, dann von vorne beginnen.
+    const wrongIndices = result.wrongWordIndices || [];
     const chunkWords = expectedEntry.text.split(/\s+/).filter(Boolean);
-    const correctionWord = (idx >= 0 && idx < chunkWords.length) ? chunkWords[idx] : null;
+    const correctionWords = wrongIndices.map(i => chunkWords[i]).filter(Boolean);
 
-    if (ownTextRevealed && idx >= 0) {
-      highlightWrongWord(expectedEntry.text, idx);
+    if (ownTextRevealed && wrongIndices.length > 0) {
+      highlightWrongWord(expectedEntry.text, wrongIndices);
     }
 
-    if (correctionWord) {
-      setTimeout(() => speakShort(correctionWord, () => setTimeout(retryOrOverlay, 400)), 500);
+    if (correctionWords.length > 0) {
+      setTimeout(() => speakCorrections(correctionWords, 0, () => setTimeout(retryOrOverlay, 400)), 500);
     } else {
       setTimeout(retryOrOverlay, 900);
     }
