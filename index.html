@@ -1752,6 +1752,11 @@ let accuracyMode = 'ausgewogen'; // 'locker' | 'ausgewogen' | 'strikt' (Beta-Fee
 let chunkSize = 1; // 1 = Satz für Satz, 10 = viele Sätze am Stück
 let sentenceOffset = 0; // Bug-Fix #6: Satz-Position INNERHALB der aktuellen eigenen Zeile
 let attemptCount = 0;
+// Wird bei jedem Zeilenwechsel (manuell "Weiter"/"Zurück" oder automatisch)
+// hochgezählt. Laufende Sprachausgabe-/Timeout-Ketten (z.B. mehrere
+// Korrektur-Wörter nacheinander) prüfen diesen Zähler und brechen sofort
+// ab, falls der Nutzer inzwischen weitergeklickt hat (Bugfix Juli 2026).
+let practiceGeneration = 0;
 let sessionStats = { correct: 0, wrong: 0, total: 0 };
 let recognition = null;
 
@@ -2019,6 +2024,7 @@ function getReadAloudQueue(fromIndex) {
 
 function renderCurrentLine() {
   const entries = getActiveEntries();
+  practiceGeneration++;
   stopListening();
   hideFeedback();
   document.getElementById('revealBtn').style.display = 'none';
@@ -2115,6 +2121,7 @@ function stepLine(direction) {
   newIndex = Math.max(0, Math.min(entries.length, newIndex));
   practiceIndex = newIndex;
   sentenceOffset = 0;
+  practiceGeneration++;
   speechSynthesis.cancel();
   stopListening();
   renderCurrentLine();
@@ -2254,6 +2261,54 @@ function wordsRoughlyEqual(a, b) {
   return levenshtein(a, b) <= maxDist;
 }
 
+// Richtet die erwarteten Wörter gegen die gesprochenen aus — echter
+// Sequenz-Abgleich (Edit-Distance-Backtrack), kein lokales Toleranzfenster
+// mehr. Dadurch bleibt die Zuordnung auch bei mehreren zu viel/zu wenig
+// gesagten Wörtern hintereinander nicht "hängen" (Bugfix Juli 2026: vorher
+// konnten mehrere Einfügungen/Auslassungen in Folge alle FOLGENDEN Wörter
+// fälschlich als falsch markieren, weil die Fenster-Suche nie wieder
+// aufholte). exact=true: nur wortwörtlich gleiche Wörter zählen ("Strikt").
+// exact=false: kleine Tippfehler wie "der"/"die" werden toleriert
+// ("Ausgewogen"/"Locker").
+function alignWords(expectedWordsNorm, spokenWords, exact) {
+  const n = expectedWordsNorm.length, m = spokenWords.length;
+  const eq = (a, b) => exact ? (a === b) : wordsRoughlyEqual(a, b);
+
+  // dp[i][j] = minimale "Bearbeitungskosten", um die ersten i erwarteten
+  // Wörter mit den ersten j gesprochenen Wörtern in Einklang zu bringen.
+  const dp = Array.from({ length: n + 1 }, () => new Array(m + 1).fill(0));
+  for (let i = 0; i <= n; i++) dp[i][0] = i;
+  for (let j = 0; j <= m; j++) dp[0][j] = j;
+  for (let i = 1; i <= n; i++) {
+    for (let j = 1; j <= m; j++) {
+      const subCost = eq(expectedWordsNorm[i - 1], spokenWords[j - 1]) ? 0 : 1;
+      dp[i][j] = Math.min(
+        dp[i - 1][j - 1] + subCost, // Treffer oder Ersetzung
+        dp[i - 1][j] + 1,           // erwartetes Wort fehlt (nicht gesagt)
+        dp[i][j - 1] + 1            // zusätzliches gesprochenes Wort (Füller o.ä.)
+      );
+    }
+  }
+
+  // Rückverfolgung: welche erwarteten Wörter wurden tatsächlich getroffen?
+  let i = n, j = m, matches = 0;
+  const wrongSet = new Set();
+  while (i > 0 || j > 0) {
+    const diagOk = i > 0 && j > 0;
+    const subCost = diagOk ? (eq(expectedWordsNorm[i - 1], spokenWords[j - 1]) ? 0 : 1) : Infinity;
+    if (diagOk && dp[i][j] === dp[i - 1][j - 1] + subCost) {
+      if (subCost === 0) matches++; else wrongSet.add(i - 1);
+      i--; j--;
+    } else if (i > 0 && dp[i][j] === dp[i - 1][j] + 1) {
+      wrongSet.add(i - 1); // erwartetes Wort wurde ausgelassen
+      i--;
+    } else {
+      j--; // zusätzliches gesprochenes Wort — betrifft kein erwartetes Wort
+    }
+  }
+  return { matches, wrongWordIndices: Array.from(wrongSet).sort((a, b) => a - b) };
+}
+
 // Vergleicht gesprochenen mit erwartetem Text.
 // Gibt {isCorrect, similarity, wrongWordIndices, expectedWordsOriginal} zurück:
 // wrongWordIndices = Indizes ALLER abweichenden ERWARTETEN Wörter, in
@@ -2263,49 +2318,28 @@ function compareSpoken(spoken, expected) {
   const expectedWordsNorm = normalizeForCompare(expected).split(' ').filter(Boolean);
   const expectedWordsOriginal = expected.split(/\s+/).filter(Boolean);
 
-  // Wortweise Ausrichtung: für jedes erwartete Wort prüfen, ob es an
-  // ungefähr derselben Stelle (±2 Wörter Toleranz) gesprochen wurde.
-  let matches = 0;
-  let wrongWordIndices = [];
-  let sPos = 0;
-  for (let e = 0; e < expectedWordsNorm.length; e++) {
-    let found = -1;
-    for (let s = Math.max(0, sPos - 1); s < Math.min(spokenWords.length, sPos + 3); s++) {
-      if (wordsRoughlyEqual(expectedWordsNorm[e], spokenWords[s])) { found = s; break; }
-    }
-    if (found >= 0) {
-      matches++;
-      sPos = found + 1;
-    } else {
-      wrongWordIndices.push(e);
-    }
-  }
+  // Fuzzy-Ausrichtung (Basis für Ähnlichkeitswert + "Ausgewogen"/"Locker")
+  const fuzzy = alignWords(expectedWordsNorm, spokenWords, false);
+  const similarity = expectedWordsNorm.length > 0 ? fuzzy.matches / expectedWordsNorm.length : 0;
 
-  const similarity = expectedWordsNorm.length > 0 ? matches / expectedWordsNorm.length : 0;
+  let isCorrect, wrongWordIndices;
 
-  let isCorrect;
   if (accuracyMode === 'strikt') {
-    // Wort für Wort exakt: gleiche Anzahl, jedes Wort identisch (normalisiert)
-    isCorrect = spokenWords.length === expectedWordsNorm.length &&
-      expectedWordsNorm.every((w, i) => w === spokenWords[i]);
-    if (isCorrect) {
-      wrongWordIndices = [];
-    } else {
-      // Positionsgenau ALLE abweichenden/fehlenden Wörter markieren
-      wrongWordIndices = expectedWordsNorm
-        .map((w, i) => (i < spokenWords.length && w === spokenWords[i]) ? -1 : i)
-        .filter(i => i !== -1);
-      if (wrongWordIndices.length === 0) {
-        // Fuzzy fand alles, aber Länge/Reihenfolge stimmt nicht exakt
-        const fallbackIdx = Math.min(spokenWords.length, expectedWordsNorm.length - 1);
-        if (fallbackIdx >= 0) wrongWordIndices = [fallbackIdx];
-      }
-    }
+    // Jedes Wort muss WORTWÖRTLICH vorkommen — aber dieselbe Fenster-Toleranz
+    // wie bei den anderen Modi, damit ein eingestreutes Füllwort nicht die
+    // ganze restliche Zeile zum "falsch" kippen lässt.
+    const exact = alignWords(expectedWordsNorm, spokenWords, true);
+    wrongWordIndices = exact.wrongWordIndices;
+    isCorrect = wrongWordIndices.length === 0;
   } else if (accuracyMode === 'ausgewogen') {
-    // Kleine Abweichungen ok
-    isCorrect = similarity >= 0.75;
+    // Jedes Wort muss zumindest fuzzy gefunden werden — kleine Abweichungen
+    // wie "der"/"die" sind ok, aber ein wirklich falsches oder fehlendes
+    // Wort zählt IMMER als Fehler, unabhängig von der Satzlänge.
+    wrongWordIndices = fuzzy.wrongWordIndices;
+    isCorrect = wrongWordIndices.length === 0;
   } else {
-    // locker: nur korrigieren, wenn komplett falsch
+    // locker: nur meckern, wenn insgesamt zu wenig übereinstimmt
+    wrongWordIndices = fuzzy.wrongWordIndices;
     isCorrect = similarity >= 0.35;
   }
 
@@ -2326,9 +2360,14 @@ function speakShort(text, onDone) {
 
 // Spricht mehrere Korrektur-Wörter nacheinander (mit kurzer Pause dazwischen),
 // z.B. wenn in einem Chunk mehrere Wörter falsch waren (Mehrfach-Update Juli 2026).
-function speakCorrections(words, i, onDone) {
+// Bricht sofort ab, falls der Nutzer inzwischen manuell weitergeklickt hat.
+function speakCorrections(words, i, gen, onDone) {
+  if (gen !== practiceGeneration) { speechSynthesis.cancel(); return; }
   if (i >= words.length) { if (onDone) onDone(); return; }
-  speakShort(words[i], () => setTimeout(() => speakCorrections(words, i + 1, onDone), 250));
+  speakShort(words[i], () => {
+    if (gen !== practiceGeneration) return;
+    setTimeout(() => speakCorrections(words, i + 1, gen, onDone), 250);
+  });
 }
 
 // Markiert bei angezeigtem eigenem Text ALLE falschen Stellen rot
@@ -2350,6 +2389,7 @@ function highlightWrongWord(chunkText, wrongWordIndices) {
 //                                   falsche Stelle rot (falls Text sichtbar)
 // - show    ("Fehler anzeigen"):    Stimme sagt "Falsch", zurück zur Stelle
 function handleSpokenResult(spoken, expectedEntry) {
+  const gen = practiceGeneration;
   const result = compareSpoken(spoken, expectedEntry.text);
   sessionStats.total++;
 
@@ -2357,7 +2397,10 @@ function handleSpokenResult(spoken, expectedEntry) {
     sessionStats.correct++;
     attemptCount = 0;
     showFeedback(true);
-    setTimeout(() => { advancePastChunk(); renderCurrentLine(); }, 700);
+    setTimeout(() => {
+      if (gen !== practiceGeneration) return;
+      advancePastChunk(); renderCurrentLine();
+    }, 700);
     return;
   }
 
@@ -2372,6 +2415,7 @@ function handleSpokenResult(spoken, expectedEntry) {
 
   // Beide korrigierenden Modi: nach 3 Fehlversuchen das Hilfe-Overlay zeigen
   const retryOrOverlay = () => {
+    if (gen !== practiceGeneration) return;
     if (attemptCount >= 3) {
       showStuckOverlay();
     } else {
@@ -2392,7 +2436,13 @@ function handleSpokenResult(spoken, expectedEntry) {
     }
 
     if (correctionWords.length > 0) {
-      setTimeout(() => speakCorrections(correctionWords, 0, () => setTimeout(retryOrOverlay, 400)), 500);
+      setTimeout(() => {
+        if (gen !== practiceGeneration) return;
+        speakCorrections(correctionWords, 0, gen, () => {
+          if (gen !== practiceGeneration) return;
+          setTimeout(retryOrOverlay, 400);
+        });
+      }, 500);
     } else {
       setTimeout(retryOrOverlay, 900);
     }
@@ -2400,7 +2450,13 @@ function handleSpokenResult(spoken, expectedEntry) {
   }
 
   // feedbackMode === 'show': "Falsch" ansagen und zur Stelle zurückspringen
-  setTimeout(() => speakShort('Falsch', () => setTimeout(retryOrOverlay, 300)), 400);
+  setTimeout(() => {
+    if (gen !== practiceGeneration) return;
+    speakShort('Falsch', () => {
+      if (gen !== practiceGeneration) return;
+      setTimeout(retryOrOverlay, 300);
+    });
+  }, 400);
 }
 
 // Rückt den Cursor (practiceIndex + sentenceOffset) hinter den soeben
