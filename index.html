@@ -608,7 +608,7 @@
       </div>
       <input type="file" id="fileInput" accept="application/pdf">
       <div class="page-limit-note" id="pageLimitNote"></div>
-      <button class="btn-text" onclick="openRedeemOverlay()" style="padding:10px 0 0;">Ich habe einen Gutscheincode</button>
+      <button class="btn-text" id="redeemLinkScreen1" onclick="openRedeemOverlay()" style="padding:10px 0 0;">Ich habe einen Gutscheincode</button>
     </div>
 
     <div class="status-line" id="statusLine"></div>
@@ -865,6 +865,18 @@
 pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
 
 // ============================================================
+// FEATURE-SCHALTER (August 2026)
+// Google-Login und die Fake-Door-Monetarisierung sind vorübergehend
+// AUSGEBLENDET, aber vollständig im Code erhalten — einfach auf true
+// setzen, um beides sofort wieder zu aktivieren. Kein Löschen von
+// Logik nötig, nur diese zwei Flags umschalten.
+// ============================================================
+const FEATURES = {
+  authEnabled: false,          // Google-Login-Leiste
+  monetizationEnabled: false,  // Preis-Gate, Kauf-Overlays, Gutschein-Einlösung
+};
+
+// ============================================================
 // Supabase (Login mit Google) - "supabase" ist hier der globale
 // Name, den das CDN-Script mitbringt; wir nennen unsere Instanz
 // bewusst anders, um die Namen nicht zu verwechseln.
@@ -903,14 +915,23 @@ async function handleAuthButtonClick() {
 }
 
 // Reagiert auf Login/Logout, auch direkt nach dem Redirect von Google zurück auf die Seite.
-supabaseClient.auth.onAuthStateChange((_event, session) => {
-  renderAuthBar(session ? session.user : null);
-});
+if (FEATURES.authEnabled) {
+  supabaseClient.auth.onAuthStateChange((_event, session) => {
+    renderAuthBar(session ? session.user : null);
+  });
 
-// Initialer Zustand beim Laden der Seite (falls schon eine Session besteht).
-supabaseClient.auth.getSession().then(({ data }) => {
-  renderAuthBar(data.session ? data.session.user : null);
-});
+  // Initialer Zustand beim Laden der Seite (falls schon eine Session besteht).
+  supabaseClient.auth.getSession().then(({ data }) => {
+    renderAuthBar(data.session ? data.session.user : null);
+  });
+} else {
+  // Login-Leiste komplett ausblenden, keine Supabase-Auth-Anfragen auslösen.
+  document.getElementById('authBar').style.display = 'none';
+}
+
+if (!FEATURES.monetizationEnabled) {
+  document.getElementById('redeemLinkScreen1').style.display = 'none';
+}
 
 // ============================================================
 // SOFT-LAUNCH / FAKE-DOOR-TEST
@@ -1091,6 +1112,10 @@ function startTutorial() {
 // Gutschein eingelöst wurde.
 // ============================================================
 function handleOwnScriptClick() {
+  if (!FEATURES.monetizationEnabled) {
+    document.getElementById('fileInput').click();
+    return;
+  }
   track('eigenes_skript_upload_versucht');
   if (hasActiveUnlock()) {
     document.getElementById('fileInput').click();
@@ -1652,7 +1677,8 @@ async function analyze() {
   // Fake-Door: Analyse eigener Skripte nur mit eingelöstem Gutschein.
   // (Serverseitige Durchsetzung folgt mit der profiles-Tabelle; für den
   // Soft-Launch-Test reicht das clientseitige Gate + MAX_PAGES-Limit.)
-  if (!hasActiveUnlock()) {
+  // Aktuell per FEATURES.monetizationEnabled deaktiviert.
+  if (FEATURES.monetizationEnabled && !hasActiveUnlock()) {
     showPriceOverlay();
     return;
   }
