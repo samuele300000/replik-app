@@ -296,6 +296,41 @@
     margin-bottom: 6px;
   }
   .mode-card .mode-desc { font-size: 13px; line-height: 1.5; color: var(--paper-dim); }
+  .mode-card.custom-card { border-style: dashed; }
+
+  /* Preset-Umschalter oben in der Probe (Modi-Update August 2026) */
+  .preset-pill-wrap { position: relative; display: inline-block; }
+  .preset-pill {
+    background: var(--stage-2);
+    border: 1px solid var(--line-strong);
+    color: var(--paper-dim);
+    border-radius: 20px;
+    padding: 7px 14px;
+    font-size: 13px;
+    font-family: 'Courier Prime', monospace;
+    cursor: pointer;
+  }
+  .preset-pill:hover { border-color: var(--spot-dim); }
+  .preset-dropdown {
+    position: absolute;
+    top: calc(100% + 6px);
+    left: 0;
+    background: var(--stage-2);
+    border: 1px solid var(--line-strong);
+    border-radius: 6px;
+    padding: 6px;
+    z-index: 20;
+    min-width: 180px;
+  }
+  .preset-dropdown-item {
+    padding: 10px 12px;
+    font-size: 13px;
+    border-radius: 4px;
+    cursor: pointer;
+    color: var(--paper-dim);
+  }
+  .preset-dropdown-item:hover { background: rgba(216,154,78,0.1); color: var(--paper); }
+  .preset-dropdown-item.selected { color: var(--spot); font-weight: 700; }
 
   .practice-stage {
     flex: 1;
@@ -665,79 +700,105 @@
   <!-- SCREEN 4: Mode select -->
   <div class="screen" data-screen="4">
     <h1>Abfrageeinstellungen</h1>
-    <p class="stage-direction">Vorlese- und Feedback-Modus wählen</p>
+    <p class="stage-direction">Wie möchtest du gerade üben?</p>
 
     <div class="mode-list">
-      <div class="mode-card" data-mode="full" onclick="selectMode('full')">
-        <div class="mode-title">Komplett</div>
-        <div class="mode-desc">Jede Zeile aller anderen Rollen wird vorgelesen — der ganze Dialog.</div>
+      <div class="mode-card" data-preset="einlesen" onclick="selectPreset('einlesen')">
+        <div class="mode-title">Einlesen</div>
+        <div class="mode-desc">Text sichtbar, ganzer Dialog wird vorgelesen, kleine Fehler sind ok.</div>
       </div>
-      <div class="mode-card selected" data-mode="cue" onclick="selectMode('cue')">
-        <div class="mode-title">Stichwort</div>
-        <div class="mode-desc">Nur der letzte Satz vor deiner Zeile wird vorgelesen.</div>
+      <div class="mode-card" data-preset="verinnerlichen" onclick="selectPreset('verinnerlichen')">
+        <div class="mode-title">Verinnerlichen</div>
+        <div class="mode-desc">Text sichtbar, nur Stichwort wird vorgelesen, Fehler werden korrigiert.</div>
       </div>
-      <div class="mode-card" data-mode="cue_full" onclick="selectMode('cue_full')">
-        <div class="mode-title">Ausführliches Stichwort</div>
-        <div class="mode-desc">Die ganze letzte Fremd-Zeile vor dir wird vorgelesen, nicht nur ihr letzter Satz.</div>
+      <div class="mode-card" data-preset="buehnenreif" onclick="selectPreset('buehnenreif')">
+        <div class="mode-title">Bühnenreif</div>
+        <div class="mode-desc">Text verborgen, Stichwort, jedes Wort muss exakt sitzen.</div>
+      </div>
+      <div class="mode-card custom-card" data-preset="custom" onclick="toggleCustomPanel()">
+        <div class="mode-title">Benutzerdefiniert <span id="customPanelToggleIcon" style="float:right;">▾</span></div>
+        <div class="mode-desc">Alle Regler einzeln einstellen.</div>
       </div>
     </div>
 
-    <div class="toggle-row">
-      <div class="toggle-label">
-        <div class="toggle-title">Eigenen Text anzeigen</div>
-        <div class="toggle-sub">Bei deinen Zeilen den Text mitlesen</div>
-      </div>
-      <div class="switch" id="toggleOwnText" onclick="toggleSwitch('toggleOwnText')"><div class="switch-knob"></div></div>
-    </div>
+    <div id="customSettingsPanel" style="display:none; margin-top:22px;">
 
-    <div class="toggle-row">
-      <div class="toggle-label">
-        <div class="toggle-title">Regieanweisungen anzeigen</div>
-        <div class="toggle-sub">Szenenbeschreibungen zwischen den Zeilen</div>
-      </div>
-      <div class="switch" id="toggleDirections" onclick="toggleSwitch('toggleDirections')"><div class="switch-knob"></div></div>
-    </div>
-
-    <div class="toggle-row">
-      <div class="toggle-label">
-        <div class="toggle-title">Gegenpart automatisch vorlesen</div>
-        <div class="toggle-sub">Sonst musst du selbst auf "Vorlesen" tippen</div>
-      </div>
-      <div class="switch on" id="toggleAutoPlay" onclick="toggleSwitch('toggleAutoPlay')"><div class="switch-knob"></div></div>
-    </div>
-
-    <div class="select-group" style="margin-top:24px;">
-      <div class="select-group-label">Feedback bei deinen Zeilen</div>
-      <div class="mode-list">
-        <div class="mode-card" data-feedback="silent" onclick="selectFeedbackMode('silent')">
-          <div class="mode-title">Frei durch</div>
-          <div class="mode-desc">Kein Unterbrechen, am Ende eine Zusammenfassung.</div>
-        </div>
-        <div class="mode-card" data-feedback="correct" onclick="selectFeedbackMode('correct')">
-          <div class="mode-title">Fehler korrigieren</div>
-          <div class="mode-desc">Die Stimme sagt automatisch das richtige Wort und du beginnst nochmal von vorn. Bei angezeigtem Text wird die falsche Stelle rot markiert.</div>
-        </div>
-        <div class="mode-card selected" data-feedback="show" onclick="selectFeedbackMode('show')">
-          <div class="mode-title">Fehler anzeigen</div>
-          <div class="mode-desc">Die Stimme sagt «Falsch» und springt zur betreffenden Stelle zurück.</div>
+      <div class="select-group">
+        <div class="select-group-label">Vorlese-Modus (Gegenpart)</div>
+        <div class="mode-list">
+          <div class="mode-card" data-mode="full" onclick="selectMode('full')">
+            <div class="mode-title">Komplett</div>
+            <div class="mode-desc">Jede Zeile aller anderen Rollen wird vorgelesen — der ganze Dialog.</div>
+          </div>
+          <div class="mode-card" data-mode="cue" onclick="selectMode('cue')">
+            <div class="mode-title">Stichwort</div>
+            <div class="mode-desc">Nur der letzte Satz vor deiner Zeile wird vorgelesen.</div>
+          </div>
+          <div class="mode-card" data-mode="cue_full" onclick="selectMode('cue_full')">
+            <div class="mode-title">Ausführliches Stichwort</div>
+            <div class="mode-desc">Die ganze letzte Fremd-Zeile vor dir wird vorgelesen, nicht nur ihr letzter Satz.</div>
+          </div>
         </div>
       </div>
-    </div>
 
-    <div class="select-group">
-      <div class="select-group-label">Genauigkeit</div>
-      <div class="chip-list">
-        <div class="chip" data-accuracy="locker" onclick="selectAccuracy('locker')">Locker</div>
-        <div class="chip selected" data-accuracy="ausgewogen" onclick="selectAccuracy('ausgewogen')">Ausgewogen</div>
-        <div class="chip" data-accuracy="strikt" onclick="selectAccuracy('strikt')">Strikt</div>
+      <div class="toggle-row">
+        <div class="toggle-label">
+          <div class="toggle-title">Eigenen Text anzeigen</div>
+          <div class="toggle-sub">Bei deinen Zeilen den Text mitlesen</div>
+        </div>
+        <div class="switch" id="toggleOwnText" onclick="toggleSwitch('toggleOwnText')"><div class="switch-knob"></div></div>
       </div>
-      <div style="font-size:12px; color:var(--muted); margin-top:8px;" id="accuracyHint">Kleine Abweichungen sind ok (z.B. «der» statt «die»).</div>
-    </div>
 
-    <div class="select-group">
-      <div class="select-group-label" id="chunkLabel">Abfrageeinheit: 1 Satz (Dialog)</div>
-      <input type="range" id="chunkSlider" min="1" max="10" value="1" oninput="updateChunkLabel(this.value)">
-      <div style="font-size:12px; color:var(--muted); margin-top:6px;">1 = Zeile für Zeile (gut für Dialog) · 10 = ganze Blöcke (gut für Monologe)</div>
+      <div class="toggle-row">
+        <div class="toggle-label">
+          <div class="toggle-title">Regieanweisungen anzeigen</div>
+          <div class="toggle-sub">Szenenbeschreibungen zwischen den Zeilen</div>
+        </div>
+        <div class="switch" id="toggleDirections" onclick="toggleSwitch('toggleDirections')"><div class="switch-knob"></div></div>
+      </div>
+
+      <div class="toggle-row">
+        <div class="toggle-label">
+          <div class="toggle-title">Gegenpart automatisch vorlesen</div>
+          <div class="toggle-sub">Sonst musst du selbst auf "Vorlesen" tippen</div>
+        </div>
+        <div class="switch on" id="toggleAutoPlay" onclick="toggleSwitch('toggleAutoPlay')"><div class="switch-knob"></div></div>
+      </div>
+
+      <div class="select-group" style="margin-top:24px;">
+        <div class="select-group-label">Feedback bei deinen Zeilen</div>
+        <div class="mode-list">
+          <div class="mode-card" data-feedback="silent" onclick="selectFeedbackMode('silent')">
+            <div class="mode-title">Frei durch</div>
+            <div class="mode-desc">Kein Unterbrechen, am Ende eine Zusammenfassung.</div>
+          </div>
+          <div class="mode-card" data-feedback="correct" onclick="selectFeedbackMode('correct')">
+            <div class="mode-title">Fehler korrigieren</div>
+            <div class="mode-desc">Die Stimme sagt automatisch das richtige Wort und du beginnst nochmal von vorn. Bei angezeigtem Text wird die falsche Stelle rot markiert.</div>
+          </div>
+          <div class="mode-card" data-feedback="show" onclick="selectFeedbackMode('show')">
+            <div class="mode-title">Fehler anzeigen</div>
+            <div class="mode-desc">Die Stimme sagt «Falsch» und springt zur betreffenden Stelle zurück.</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="select-group">
+        <div class="select-group-label">Genauigkeit</div>
+        <div class="chip-list">
+          <div class="chip" data-accuracy="locker" onclick="selectAccuracy('locker')">Locker</div>
+          <div class="chip" data-accuracy="ausgewogen" onclick="selectAccuracy('ausgewogen')">Ausgewogen</div>
+          <div class="chip" data-accuracy="strikt" onclick="selectAccuracy('strikt')">Strikt</div>
+        </div>
+        <div style="font-size:12px; color:var(--muted); margin-top:8px;" id="accuracyHint"></div>
+      </div>
+
+      <div class="select-group">
+        <div class="select-group-label" id="chunkLabel">Abfrageeinheit: 1 Satz (Dialog)</div>
+        <input type="range" id="chunkSlider" min="1" max="10" value="1" oninput="updateChunkLabel(this.value)">
+        <div style="font-size:12px; color:var(--muted); margin-top:6px;">1 = Zeile für Zeile (gut für Dialog) · 10 = ganze Blöcke (gut für Monologe)</div>
+      </div>
+
     </div>
 
     <div class="cta-bar">
@@ -749,7 +810,14 @@
   <!-- SCREEN 5: Practice / Read-aloud -->
   <div class="screen" data-screen="5">
     <h1>Probe läuft</h1>
-    <p class="stage-direction" id="practiceModeLabel">Modus</p>
+    <div class="preset-pill-wrap">
+      <button class="preset-pill" id="presetPill" onclick="togglePresetDropdown(event)">⚙ <span id="presetPillLabel">Verinnerlichen</span> ▾</button>
+      <div class="preset-dropdown" id="presetDropdown" style="display:none;">
+        <div class="preset-dropdown-item" data-preset="einlesen" onclick="selectPresetFromPractice('einlesen')">Einlesen</div>
+        <div class="preset-dropdown-item" data-preset="verinnerlichen" onclick="selectPresetFromPractice('verinnerlichen')">Verinnerlichen</div>
+        <div class="preset-dropdown-item" data-preset="buehnenreif" onclick="selectPresetFromPractice('buehnenreif')">Bühnenreif</div>
+      </div>
+    </div>
 
     <div class="practice-stage">
       <div class="line-block" id="lineBlock">
@@ -1786,6 +1854,110 @@ let practiceGeneration = 0;
 let sessionStats = { correct: 0, wrong: 0, total: 0 };
 let recognition = null;
 
+// ============================================================
+// EINSTELLUNGS-PRESETS (August 2026)
+// Drei Lernstufen statt einzelner Regler. "Benutzerdefiniert" ist ein
+// vierter, impliziter Zustand: sobald in der aufgeklappten Detailansicht
+// manuell etwas verändert wird, springt die Auswahl automatisch dorthin.
+// ============================================================
+const PRESETS = {
+  einlesen:       { selectedMode: 'full', showOwnText: true,  accuracyMode: 'locker',     feedbackMode: 'correct', chunkSize: 1 },
+  verinnerlichen: { selectedMode: 'cue',  showOwnText: true,  accuracyMode: 'ausgewogen', feedbackMode: 'correct', chunkSize: 1 },
+  buehnenreif:    { selectedMode: 'cue',  showOwnText: false, accuracyMode: 'strikt',     feedbackMode: 'show',    chunkSize: 1 },
+};
+const PRESET_LABELS = { einlesen: 'Einlesen', verinnerlichen: 'Verinnerlichen', buehnenreif: 'Bühnenreif', custom: 'Benutzerdefiniert' };
+
+let currentPresetKey = 'verinnerlichen';
+let applyingPreset = false;   // true, während selectPreset() Werte programmatisch setzt
+let customPanelExpanded = false;
+
+// Wendet ein Preset auf alle darunterliegenden Regler an (nutzt dieselben
+// Funktionen, die auch beim manuellen Klicken laufen — so bleibt die
+// Detailansicht IMMER exakt synchron mit dem aktuell aktiven Preset).
+function selectPreset(key) {
+  currentPresetKey = key;
+  const p = PRESETS[key];
+  applyingPreset = true;
+  selectMode(p.selectedMode);
+  setSwitchState('toggleOwnText', p.showOwnText);
+  selectFeedbackMode(p.feedbackMode);
+  selectAccuracy(p.accuracyMode);
+  const slider = document.getElementById('chunkSlider');
+  if (slider) slider.value = p.chunkSize;
+  updateChunkLabel(p.chunkSize);
+  applyingPreset = false;
+
+  // Beim Wählen eines festen Presets die Detailansicht wieder einklappen
+  customPanelExpanded = false;
+  const panel = document.getElementById('customSettingsPanel');
+  if (panel) panel.style.display = 'none';
+  const icon = document.getElementById('customPanelToggleIcon');
+  if (icon) icon.textContent = '▾';
+
+  renderPresetCards();
+  const toStep5 = document.getElementById('toStep5');
+  if (toStep5) toStep5.disabled = false;
+}
+
+// Wird von JEDEM manuellen Regler-Klick aufgerufen. Springt auf
+// "Benutzerdefiniert", außer wir stecken gerade selbst mitten in
+// selectPreset() (dann ist die Änderung ja gewollt, kein Nutzer-Zutun).
+function markCustomIfUserAction() {
+  if (applyingPreset) return;
+  currentPresetKey = 'custom';
+  renderPresetCards();
+}
+
+// Markiert die aktuell aktive Preset-Karte (Screen 4) + aktualisiert die
+// Pille in der Probe (Screen 5), falls sichtbar.
+function renderPresetCards() {
+  document.querySelectorAll('.mode-card[data-preset]').forEach(c => {
+    c.classList.toggle('selected', c.getAttribute('data-preset') === currentPresetKey);
+  });
+  updatePresetPillLabel();
+}
+
+function updatePresetPillLabel() {
+  const el = document.getElementById('presetPillLabel');
+  if (el) el.textContent = PRESET_LABELS[currentPresetKey] || 'Benutzerdefiniert';
+  document.querySelectorAll('.preset-dropdown-item[data-preset]').forEach(c => {
+    c.classList.toggle('selected', c.getAttribute('data-preset') === currentPresetKey);
+  });
+}
+
+// Klick auf die "Benutzerdefiniert"-Karte: nur auf-/zuklappen, OHNE das
+// Preset selbst zu wechseln — erst eine tatsächliche Änderung darin zählt.
+function toggleCustomPanel() {
+  customPanelExpanded = !customPanelExpanded;
+  document.getElementById('customSettingsPanel').style.display = customPanelExpanded ? 'block' : 'none';
+  document.getElementById('customPanelToggleIcon').textContent = customPanelExpanded ? '▴' : '▾';
+}
+
+// Schneller Moduswechsel DIREKT in der Probe (Beta-Feedback August 2026),
+// ohne zurück in die Einstellungen zu müssen.
+function togglePresetDropdown(evt) {
+  if (evt) evt.stopPropagation();
+  const dd = document.getElementById('presetDropdown');
+  dd.style.display = dd.style.display === 'block' ? 'none' : 'block';
+}
+document.addEventListener('click', (evt) => {
+  const dd = document.getElementById('presetDropdown');
+  if (dd && dd.style.display === 'block' && !evt.target.closest('.preset-pill-wrap')) {
+    dd.style.display = 'none';
+  }
+});
+
+function selectPresetFromPractice(key) {
+  selectPreset(key);
+  document.getElementById('presetDropdown').style.display = 'none';
+  speechSynthesis.cancel();
+  sentenceOffset = 0;
+  renderCurrentLine();
+}
+
+// Startzustand beim Laden der Seite: "Verinnerlichen" ist voreingestellt.
+selectPreset('verinnerlichen');
+
 function saveProjectAndContinue() {
   const project = {
     fileName: selectedFile.name,
@@ -1869,13 +2041,20 @@ function updateStep3Validity() {
   document.getElementById('toStep4').disabled = (selectedScenes.size === 0 && selectedPages.size === 0);
 }
 
-function toggleSwitch(id) {
+// Setzt einen Schalter programmatisch (z.B. von einem Preset) OHNE das als
+// "Benutzerdefiniert" zu werten — dafür ist applyingPreset da (siehe unten).
+function setSwitchState(id, isOn) {
   const el = document.getElementById(id);
-  el.classList.toggle('on');
-  const isOn = el.classList.contains('on');
+  el.classList.toggle('on', isOn);
   if (id === 'toggleOwnText') showOwnText = isOn;
   if (id === 'toggleDirections') showDirections = isOn;
   if (id === 'toggleAutoPlay') autoPlayForeign = isOn;
+}
+
+function toggleSwitch(id) {
+  const el = document.getElementById(id);
+  setSwitchState(id, !el.classList.contains('on'));
+  markCustomIfUserAction();
 }
 
 // Liefert nur die Einträge, die zu den gewählten Szenen/Seiten gehören.
@@ -1914,12 +2093,14 @@ function selectMode(mode) {
   document.querySelectorAll('.mode-card[data-mode]').forEach(c => c.classList.remove('selected'));
   document.querySelector(`.mode-card[data-mode="${mode}"]`).classList.add('selected');
   document.getElementById('toStep5').disabled = false;
+  markCustomIfUserAction();
 }
 
 function selectFeedbackMode(mode) {
   feedbackMode = mode;
   document.querySelectorAll('.mode-card[data-feedback]').forEach(c => c.classList.remove('selected'));
   document.querySelector(`.mode-card[data-feedback="${mode}"]`).classList.add('selected');
+  markCustomIfUserAction();
 }
 
 // Beta-Feedback #7: drei feste Genauigkeits-Modi statt Schieberegler
@@ -1933,6 +2114,7 @@ function selectAccuracy(mode) {
     strikt: 'Wort für Wort muss exakt stimmen.'
   };
   document.getElementById('accuracyHint').textContent = hints[mode];
+  markCustomIfUserAction();
 }
 
 // Zerlegt einen Text in Sätze. Bug-Fix #6: Diese Funktion ist jetzt die
@@ -1999,6 +2181,7 @@ function updateChunkLabel(value) {
   else if (chunkSize <= 6) label = chunkSize + ' Sätze (gemischt)';
   else label = chunkSize + ' Sätze (Monolog)';
   document.getElementById('chunkLabel').textContent = 'Abfrageeinheit: ' + label;
+  markCustomIfUserAction();
 }
 
 function startPractice() {
@@ -2007,8 +2190,7 @@ function startPractice() {
   sentenceOffset = 0;
   attemptCount = 0;
   sessionStats = { correct: 0, wrong: 0, total: 0 };
-  const modeLabels = { full: 'Komplett', cue: 'Stichwort', cue_full: 'Ausführliches Stichwort' };
-  document.getElementById('practiceModeLabel').textContent = modeLabels[selectedMode];
+  updatePresetPillLabel();
   goTo(5);
   renderCurrentLine();
 }
