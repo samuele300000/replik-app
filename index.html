@@ -3,28 +3,36 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Replik — Text lernen</title>
+<title>MeinStichwort.App — Text lernen</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script> window.va = window.va || function () { (window.vaq = window.vaq || []).push(arguments); }; </script>
 <script defer src="/_vercel/insights/script.js"></script>
 <style>
-  @import url('https://fonts.googleapis.com/css2?family=Courier+Prime:ital,wght@0,400;0,700;1,400&family=Inter:wght@400;500;600&display=swap');
+  @import url('https://fonts.googleapis.com/css2?family=Anton&family=Courier+Prime:ital,wght@0,400;0,700;1,400&family=Inter:wght@400;500;600&display=swap');
 
   :root {
-    --stage: #1A1816;
-    --stage-2: #242019;
-    --stage-3: #2E2922;
-    --paper: #F0EAD8;
-    --paper-dim: #DDD5BD;
-    --spot: #D89A4E;
-    --spot-dim: #8A6736;
-    --spot-bright: #F0B868;
-    --muted: #9c958a;
-    --line: rgba(240,234,216,0.12);
-    --line-strong: rgba(240,234,216,0.22);
-    --err: #C4503D;
-    --ok: #78A66C;
+    /* Bühnen-Look à la Herbert Fritsch: fast schwarzer Bühnenboden,
+       reine ungebrochene Signalfarben statt gedämpfter Töne (Restyle Aug 2026). */
+    --stage: #0B0B0D;
+    --stage-2: #18171B;
+    --stage-3: #221F26;
+    --paper: #F5F1E8;
+    --paper-dim: #C7C1B4;
+    --spot: #FF2F9E;
+    --spot-dim: #99215F;
+    --spot-bright: #FF5CB8;
+    --muted: #8E8A81;
+    --line: rgba(245,241,232,0.14);
+    --line-strong: rgba(245,241,232,0.26);
+    --err: #FF5A1F;
+    --ok: #16E0D6;
+    --pink: #FF2F9E;
+    --orange: #FF5A1F;
+    --yellow: #FFC700;
+    --yellow-bright: #FFD633;
+    --yellow-ink: #3A2900;
+    --cyan: #16E0D6;
   }
 
   * { box-sizing: border-box; }
@@ -54,9 +62,13 @@
     padding: 20px 24px 16px;
     border-bottom: 1px solid var(--line);
   }
-  .wordmark { font-family: 'Courier Prime', monospace; font-size: 18px; }
-  .wordmark span { color: var(--spot); }
+  .wordmark { font-family: 'Anton', sans-serif; font-size: 19px; letter-spacing: 0.01em; }
+  .wordmark .wm-stichwort { color: var(--cyan); }
+  .wordmark .wm-dotapp { color: var(--spot); }
   .step-indicator { font-size: 12px; color: var(--muted); letter-spacing: 0.04em; }
+
+  .brand-bar { display: flex; height: 4px; }
+  .brand-bar span { flex: 1; }
 
   .authbar {
     display: flex;
@@ -96,7 +108,7 @@
     to { opacity: 1; transform: translateY(0); }
   }
 
-  h1 { font-family: 'Courier Prime', monospace; font-size: 24px; font-weight: 700; margin: 0 0 8px; line-height: 1.3; }
+  h1 { font-family: 'Anton', sans-serif; font-weight: 400; font-size: 27px; margin: 0 0 8px; line-height: 1.15; letter-spacing: 0.005em; }
   .stage-direction {
     font-family: 'Courier Prime', monospace;
     font-style: italic;
@@ -130,7 +142,7 @@
     cursor: pointer;
     transition: border-color 0.2s, background 0.2s;
   }
-  .dropzone:hover, .dropzone.has-file { border-color: var(--spot); background: rgba(216,154,78,0.06); }
+  .dropzone:hover, .dropzone.has-file { border-color: var(--spot); background: rgba(255,47,158,0.06); }
   .dropzone .label-main { font-size: 15px; margin-bottom: 4px; }
   .dropzone .label-sub { font-size: 13px; color: var(--muted); }
   .dropzone .file-name { font-family: 'Courier Prime', monospace; font-size: 14px; margin-top: 4px; }
@@ -160,7 +172,7 @@
     cursor: pointer;
     transition: border-color 0.2s, background 0.2s;
   }
-  .project-card:hover { border-color: var(--spot-dim); background: rgba(216,154,78,0.05); }
+  .project-card:hover { border-color: var(--spot-dim); background: rgba(255,47,158,0.05); }
   .project-card .project-name { font-family: 'Courier Prime', monospace; font-size: 14px; }
   .project-card .project-meta { font-size: 11px; color: var(--muted); margin-top: 2px; }
   .project-card .project-delete {
@@ -182,7 +194,7 @@
     transition: border-color 0.2s, background 0.2s;
   }
   .role-card:hover { border-color: var(--spot-dim); }
-  .role-card.selected { border-color: var(--spot); background: rgba(216,154,78,0.08); }
+  .role-card.selected { border-color: var(--spot); background: rgba(255,47,158,0.08); }
   .role-card .role-name { font-family: 'Courier Prime', monospace; font-weight: 700; font-size: 16px; letter-spacing: 0.02em; }
   .role-card .role-meta { font-size: 12px; color: var(--muted); margin-top: 3px; }
   .role-check {
@@ -230,8 +242,8 @@
   }
   .btn-primary {
     width: 100%;
-    background: var(--spot);
-    color: var(--stage);
+    background: var(--yellow);
+    color: var(--yellow-ink);
     border: none;
     border-radius: 4px;
     padding: 15px;
@@ -240,7 +252,7 @@
     cursor: pointer;
     transition: background 0.2s, opacity 0.2s;
   }
-  .btn-primary:hover:not(:disabled) { background: var(--spot-bright); }
+  .btn-primary:hover:not(:disabled) { background: var(--yellow-bright); }
   .btn-primary:disabled { opacity: 0.35; cursor: not-allowed; }
   .btn-text {
     width: 100%;
@@ -287,7 +299,7 @@
     transition: border-color 0.2s, background 0.2s;
   }
   .mode-card:hover { border-color: var(--spot-dim); }
-  .mode-card.selected { border-color: var(--spot); background: rgba(216,154,78,0.08); }
+  .mode-card.selected { border-color: var(--spot); background: rgba(255,47,158,0.1); }
   .mode-card .mode-title {
     font-family: 'Courier Prime', monospace;
     font-weight: 700;
@@ -296,21 +308,47 @@
     margin-bottom: 6px;
   }
   .mode-card .mode-desc { font-size: 13px; line-height: 1.5; color: var(--paper-dim); }
-  .mode-card.custom-card { border-style: dashed; }
+  /* "Benutzerdefiniert"-Karte: bewusst halb so hoch wie die drei Hauptmodi,
+     damit sie klar als eigene, untergeordnete Kategorie erkennbar ist. */
+  .mode-card.custom-card { padding: 8px 18px; border-style: dashed; }
+  .mode-card.custom-card .mode-title { margin-bottom: 0; color: var(--paper-dim); }
+
+  /* Die drei Hauptmodi bekommen je eine eigene Signalfarbe als Streifen
+     (Restyle Aug 2026) — Farbe kodiert zugleich, welcher Modus aktiv ist. */
+  .mode-card[data-preset]:not(.custom-card) { position: relative; padding-left: 26px; overflow: hidden; }
+  .mode-card[data-preset]:not(.custom-card)::before { content: ''; position: absolute; left: 0; top: 0; bottom: 0; width: 6px; }
+  .mode-card[data-preset="einlesen"]::before { background: var(--cyan); }
+  .mode-card[data-preset="einlesen"] .mode-title { color: var(--cyan); }
+  .mode-card[data-preset="einlesen"].selected { border-color: var(--cyan); background: rgba(22,224,214,0.1); }
+  .mode-card[data-preset="verinnerlichen"]::before { background: var(--pink); }
+  .mode-card[data-preset="verinnerlichen"] .mode-title { color: var(--pink); }
+  .mode-card[data-preset="verinnerlichen"].selected { border-color: var(--pink); background: rgba(255,47,158,0.1); }
+  .mode-card[data-preset="buehnenreif"]::before { background: var(--orange); }
+  .mode-card[data-preset="buehnenreif"] .mode-title { color: var(--orange); }
+  .mode-card[data-preset="buehnenreif"].selected { border-color: var(--orange); background: rgba(255,90,31,0.1); }
+
+  /* Detail-Regler INNERHALB von "Benutzerdefiniert" (Vorlese-Modus,
+     Feedback-Modus): kleiner und optisch abgesetzt von den drei
+     Hauptmodi-Karten, damit die Hierarchie sofort klar ist. */
+  .mini-mode-list { gap: 6px; }
+  .mode-card.mini-mode-card { padding: 9px 14px; border-radius: 4px; border-color: var(--line); }
+  .mode-card.mini-mode-card .mode-title { font-size: 12.5px; margin-bottom: 2px; }
+  .mode-card.mini-mode-card .mode-desc { font-size: 11px; line-height: 1.4; }
 
   /* Preset-Umschalter oben in der Probe (Modi-Update August 2026) */
   .preset-pill-wrap { position: relative; display: inline-block; }
   .preset-pill {
-    background: var(--stage-2);
-    border: 1px solid var(--line-strong);
-    color: var(--paper-dim);
+    background: var(--spot);
+    border: none;
+    color: #3A0020;
+    font-weight: 700;
     border-radius: 20px;
     padding: 7px 14px;
     font-size: 13px;
     font-family: 'Courier Prime', monospace;
     cursor: pointer;
   }
-  .preset-pill:hover { border-color: var(--spot-dim); }
+  .preset-pill:hover { background: var(--spot-bright); }
   .preset-dropdown {
     position: absolute;
     top: calc(100% + 6px);
@@ -329,7 +367,7 @@
     cursor: pointer;
     color: var(--paper-dim);
   }
-  .preset-dropdown-item:hover { background: rgba(216,154,78,0.1); color: var(--paper); }
+  .preset-dropdown-item:hover { background: rgba(255,47,158,0.1); color: var(--paper); }
   .preset-dropdown-item.selected { color: var(--spot); font-weight: 700; }
 
   .practice-stage {
@@ -370,8 +408,8 @@
   }
   .ctrl-btn:hover:not(:disabled) { border-color: var(--spot-dim); }
   .ctrl-btn:disabled { opacity: 0.3; cursor: not-allowed; }
-  .ctrl-btn.primary { background: var(--spot); color: var(--stage); border: none; font-weight: 600; flex: 1.4; }
-  .ctrl-btn.primary:hover:not(:disabled) { background: var(--spot-bright); }
+  .ctrl-btn.primary { background: var(--yellow); color: var(--yellow-ink); border: none; font-weight: 600; flex: 1.4; }
+  .ctrl-btn.primary:hover:not(:disabled) { background: var(--yellow-bright); }
   .progress-label { font-size: 12px; color: var(--muted); }
 
   .select-group { margin-bottom: 26px; }
@@ -393,7 +431,7 @@
     color: var(--paper-dim);
   }
   .chip:hover { border-color: var(--spot-dim); }
-  .chip.selected { border-color: var(--spot); background: rgba(216,154,78,0.12); color: var(--paper); }
+  .chip.selected { border-color: var(--spot); background: rgba(255,47,158,0.12); color: var(--paper); }
 
   .toggle-row {
     display: flex;
@@ -435,8 +473,8 @@
     width: fit-content;
   }
   .feedback-pill.show { display: block; }
-  .feedback-pill.correct { background: rgba(120,166,108,0.18); color: var(--ok); }
-  .feedback-pill.wrong { background: rgba(196,80,61,0.18); color: var(--err); }
+  .feedback-pill.correct { background: rgba(22,224,214,0.16); color: var(--ok); }
+  .feedback-pill.wrong { background: rgba(255,90,31,0.16); color: var(--err); }
 
   .reveal-btn {
     display: none;
@@ -446,7 +484,7 @@
     color: var(--muted);
     font-size: 12px;
     text-decoration: underline;
-    text-decoration-color: rgba(156,149,138,0.4);
+    text-decoration-color: rgba(142,138,129,0.4);
     cursor: pointer;
   }
 
@@ -594,19 +632,22 @@
     padding: 8px 0 90px;
     font-size: 11px;
   }
-  .footer-links a { color: var(--muted); text-decoration: underline; text-decoration-color: rgba(156,149,138,0.4); }
+  .footer-links a { color: var(--muted); text-decoration: underline; text-decoration-color: rgba(142,138,129,0.4); }
 
   /* Probe-Screen braucht mehr Platz unten, weil die fixe Bar dort höher ist */
   .screen[data-screen="5"] { padding-bottom: 190px; }
 </style>
 </head>
 <body>
-<h2 style="position:absolute; width:1px; height:1px; overflow:hidden;">Replik App: PDF-Skript hochladen, Rollen erkennen lassen, mehrere Rollen auswählen.</h2>
+<h2 style="position:absolute; width:1px; height:1px; overflow:hidden;">MeinStichwort.App: PDF-Skript hochladen, Rollen erkennen lassen, mehrere Rollen auswählen.</h2>
 
 <div class="app">
   <div class="topbar">
-    <div class="wordmark">re<span>plik</span></div>
+    <div class="wordmark">Mein<span class="wm-stichwort">Stichwort</span><span class="wm-dotapp">.App</span></div>
     <div class="step-indicator" id="stepIndicator">Schritt 1 / 5</div>
+  </div>
+  <div class="brand-bar" aria-hidden="true">
+    <span style="background:var(--cyan);"></span><span style="background:var(--pink);"></span><span style="background:var(--orange);"></span><span style="background:var(--yellow);"></span>
   </div>
 
   <div class="authbar" id="authBar">
@@ -705,7 +746,7 @@
     <div class="mode-list">
       <div class="mode-card" data-preset="einlesen" onclick="selectPreset('einlesen')">
         <div class="mode-title">Einlesen</div>
-        <div class="mode-desc">Text sichtbar, ganzer Dialog wird vorgelesen, kleine Fehler sind ok.</div>
+        <div class="mode-desc">Text sichtbar, ausführliches Stichwort wird vorgelesen, kleine Abweichungen sind ok.</div>
       </div>
       <div class="mode-card" data-preset="verinnerlichen" onclick="selectPreset('verinnerlichen')">
         <div class="mode-title">Verinnerlichen</div>
@@ -717,7 +758,6 @@
       </div>
       <div class="mode-card custom-card" data-preset="custom" onclick="toggleCustomPanel()">
         <div class="mode-title">Benutzerdefiniert <span id="customPanelToggleIcon" style="float:right;">▾</span></div>
-        <div class="mode-desc">Alle Regler einzeln einstellen.</div>
       </div>
     </div>
 
@@ -725,16 +765,16 @@
 
       <div class="select-group">
         <div class="select-group-label">Vorlese-Modus (Gegenpart)</div>
-        <div class="mode-list">
-          <div class="mode-card" data-mode="full" onclick="selectMode('full')">
+        <div class="mode-list mini-mode-list">
+          <div class="mode-card mini-mode-card" data-mode="full" onclick="selectMode('full')">
             <div class="mode-title">Komplett</div>
             <div class="mode-desc">Jede Zeile aller anderen Rollen wird vorgelesen — der ganze Dialog.</div>
           </div>
-          <div class="mode-card" data-mode="cue" onclick="selectMode('cue')">
+          <div class="mode-card mini-mode-card" data-mode="cue" onclick="selectMode('cue')">
             <div class="mode-title">Stichwort</div>
             <div class="mode-desc">Nur der letzte Satz vor deiner Zeile wird vorgelesen.</div>
           </div>
-          <div class="mode-card" data-mode="cue_full" onclick="selectMode('cue_full')">
+          <div class="mode-card mini-mode-card" data-mode="cue_full" onclick="selectMode('cue_full')">
             <div class="mode-title">Ausführliches Stichwort</div>
             <div class="mode-desc">Die ganze letzte Fremd-Zeile vor dir wird vorgelesen, nicht nur ihr letzter Satz.</div>
           </div>
@@ -767,16 +807,16 @@
 
       <div class="select-group" style="margin-top:24px;">
         <div class="select-group-label">Feedback bei deinen Zeilen</div>
-        <div class="mode-list">
-          <div class="mode-card" data-feedback="silent" onclick="selectFeedbackMode('silent')">
+        <div class="mode-list mini-mode-list">
+          <div class="mode-card mini-mode-card" data-feedback="silent" onclick="selectFeedbackMode('silent')">
             <div class="mode-title">Frei durch</div>
             <div class="mode-desc">Kein Unterbrechen, am Ende eine Zusammenfassung.</div>
           </div>
-          <div class="mode-card" data-feedback="correct" onclick="selectFeedbackMode('correct')">
+          <div class="mode-card mini-mode-card" data-feedback="correct" onclick="selectFeedbackMode('correct')">
             <div class="mode-title">Fehler korrigieren</div>
             <div class="mode-desc">Die Stimme sagt automatisch das richtige Wort und du beginnst nochmal von vorn. Bei angezeigtem Text wird die falsche Stelle rot markiert.</div>
           </div>
-          <div class="mode-card" data-feedback="show" onclick="selectFeedbackMode('show')">
+          <div class="mode-card mini-mode-card" data-feedback="show" onclick="selectFeedbackMode('show')">
             <div class="mode-title">Fehler anzeigen</div>
             <div class="mode-desc">Die Stimme sagt «Falsch» und springt zur betreffenden Stelle zurück.</div>
           </div>
@@ -1117,7 +1157,7 @@ const TUTORIAL_PROJECT = {
     { type: 'dialogue', speaker: 'JONAS', text: 'Ich krieg das nicht in den Kopf. Drei Seiten Monolog, und ich hab niemanden, der mir die Stichworte gibt.', page: 1, scene: 'Backstage' },
     { type: 'dialogue', speaker: 'MARA', text: 'Dafür brauchst du keinen Menschen. Dafür brauchst du das hier.', page: 1, scene: 'Backstage', inline_directions: [{ after_word_index: 4, text: 'hält das Tablet hoch' }] },
     { type: 'dialogue', speaker: 'JONAS', text: 'Was ist das?', page: 1, scene: 'Backstage' },
-    { type: 'dialogue', speaker: 'MARA', text: 'Replik. Eine App zum Textlernen. Du lädst dein Skript als PDF hoch, und der Rest geht fast von allein.', page: 1, scene: 'Backstage' },
+    { type: 'dialogue', speaker: 'MARA', text: 'MeinStichwort.App. Eine App zum Textlernen. Du lädst dein Skript als PDF hoch, und der Rest geht fast von allein.', page: 1, scene: 'Backstage' },
     { type: 'dialogue', speaker: 'JONAS', text: 'Fast?', page: 1, scene: 'Backstage' },
     { type: 'dialogue', speaker: 'MARA', text: 'Pass auf. Ich lade dein Textbuch hoch – einmal antippen, PDF auswählen, fertig. Die App liest das Dokument und erkennt automatisch, wer welche Zeile spricht und was reine Regieanweisung ist.', page: 1, scene: 'Backstage' },
     { type: 'dialogue', speaker: 'JONAS', text: 'Das macht sie einfach so?', page: 1, scene: 'Backstage' },
@@ -1861,7 +1901,7 @@ let recognition = null;
 // manuell etwas verändert wird, springt die Auswahl automatisch dorthin.
 // ============================================================
 const PRESETS = {
-  einlesen:       { selectedMode: 'full', showOwnText: true,  accuracyMode: 'locker',     feedbackMode: 'correct', chunkSize: 1 },
+  einlesen:       { selectedMode: 'cue_full', showOwnText: true,  accuracyMode: 'ausgewogen', feedbackMode: 'correct', chunkSize: 1 },
   verinnerlichen: { selectedMode: 'cue',  showOwnText: true,  accuracyMode: 'ausgewogen', feedbackMode: 'correct', chunkSize: 1 },
   buehnenreif:    { selectedMode: 'cue',  showOwnText: false, accuracyMode: 'strikt',     feedbackMode: 'show',    chunkSize: 1 },
 };
