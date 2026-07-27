@@ -2364,25 +2364,23 @@ function renderCurrentLine() {
     document.getElementById('playBtn').disabled = true;
     if (!showOwnText) document.getElementById('revealBtn').style.display = 'block';
 
-    // Bugfix Juli 2026: Mikrofon-Anlaufzeit. Chrome braucht nach
-    // recognition.start() eine kurze Anlaufphase, bevor tatsächlich
-    // Audio aufgenommen wird. Bisher wurde GLEICHZEITIG die eigene
-    // Zeile angezeigt / "🎤 jetzt sprechen" eingeblendet — wer die Zeile
-    // schon auswendig kennt (genau der Sinn von "Verinnerlichen"),
-    // spricht dann oft los, BEVOR das Mikrofon wirklich zuhört. Die
-    // ersten ein bis zwei Wörter fehlen dann komplett in der Erkennung
-    // und werden fälschlich als "falsch" markiert.
-    // Fix: Mikrofon SOFORT starten (damit die Anlaufzeit möglichst früh
-    // beginnt), den sichtbaren "los geht's"-Hinweis (Zeilentext /
-    // Mikro-Symbol) aber erst kurz danach zeigen.
+    // Bugfix Juli 2026 (Teil 2): Statt einer geratenen festen Wartezeit
+    // (die am Desktop zu kurz war, siehe Nutzer-Feedback) warten wir jetzt
+    // auf das ECHTE "audiostart"-Signal des Browsers — das feuert genau
+    // dann, wenn Chrome wirklich anfängt zuzuhören. Das Sicherheitsnetz
+    // (FALLBACK_MS) greift nur, falls dieses Signal ausnahmsweise gar
+    // nicht feuert, damit die Anzeige nie hängen bleibt.
     const gen = practiceGeneration;
-    const MIC_WARMUP_MS = 350;
-    startListening({ ...entry, text: chunkText });
-    document.getElementById('lineText').textContent = '🎤 Mikrofon wird bereit…';
-    setTimeout(() => {
-      if (gen !== practiceGeneration) return; // Nutzer hat inzwischen navigiert
+    const FALLBACK_MS = 1200;
+    let revealed = false;
+    const revealPrompt = () => {
+      if (revealed || gen !== practiceGeneration) return;
+      revealed = true;
       document.getElementById('lineText').textContent = showOwnText ? chunkText : '🎤 jetzt sprechen';
-    }, MIC_WARMUP_MS);
+    };
+    startListening({ ...entry, text: chunkText }, revealPrompt);
+    document.getElementById('lineText').textContent = '🎤 Mikrofon wird bereit…';
+    setTimeout(revealPrompt, FALLBACK_MS);
   } else {
     // Fremd-Zeile: entweder automatisch vorlesen, oder auf Knopfdruck warten
     const { queue } = getReadAloudQueue(practiceIndex);
@@ -2481,7 +2479,7 @@ function restartListening() {
   }
 }
 
-function startListening(expectedEntry) {
+function startListening(expectedEntry, onAudioStart) {
   if (!SpeechRecognitionAPI) {
     setMicState('off', 'Spracherkennung nicht unterstützt — bitte Chrome verwenden.');
     return;
@@ -2515,6 +2513,15 @@ function startListening(expectedEntry) {
     if (event.error === 'no-speech' || event.error === 'aborted') return; // onend übernimmt
     expectingListening = false;
     setMicState('stopped', 'Mikrofon-Fehler (' + event.error + ') — tippen zum Wieder-Zuhören');
+  };
+
+  // Bugfix Juli 2026 (Teil 2): Feste Wartezeit durch das ECHTE Browser-
+  // Signal ersetzt. "audiostart" feuert genau dann, wenn Chrome
+  // tatsächlich anfängt, Audio aufzunehmen — das dauert je nach Gerät
+  // unterschiedlich lang (am Desktop oft länger als am Handy). Damit
+  // reagiert die App automatisch richtig, egal auf welchem Gerät.
+  recognition.onaudiostart = () => {
+    if (onAudioStart) onAudioStart();
   };
 
   // Chrome beendet die Erkennung nach Stille / Display-Sperre von selbst.
