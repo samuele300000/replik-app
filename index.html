@@ -2529,9 +2529,23 @@ function stopListening() {
 
 // ---------- Textvergleich (Beta-Feedback #7: drei feste Modi) ----------
 
+// BUG-PROTOKOLL SPRACHERKENNUNG (Juli 2026) — siehe Zusammenfassung im
+// Chat für die vollständige Liste der geprüften/behobenen Fälle.
 function normalizeForCompare(s) {
-  return s.toLowerCase()
-    .replace(/[.,!?;:…„""«»\-–—'']/g, ' ')
+  return s
+    // Unsichtbare/versteckte Zeichen aus der PDF-Extraktion entfernen
+    // (weicher Trennstrich an Zeilenumbrüchen, Zero-Width-Zeichen, BOM) —
+    // diese sieht man im Text NICHT, sie können aber ein Wort unsichtbar
+    // "kaputt" machen, sodass es nie mehr exakt matched.
+    .replace(/[\u00AD\u200B\u200C\u200D\uFEFF]/g, '')
+    .toLowerCase()
+    // ß und ss klingen identisch (nur Schreibweise unterschiedlich,
+    // z.B. "groß" vs. Schweizer "gross") — für den Sprachvergleich
+    // immer vereinheitlichen, auch im "Strikt"-Modus.
+    .replace(/ß/g, 'ss')
+    // Satz- und Anführungszeichen aller gängigen Varianten (inkl. gerader
+    // Anführungszeichen/Apostrophe, wie sie oft aus Word/PDF kommen)
+    .replace(/[.,!?;:…„""«»‹›‚‛"'\-–—'’()\[\]{}\/\\*~]/g, ' ')
     .replace(/\s+/g, ' ')
     .trim();
 }
@@ -2616,10 +2630,81 @@ function alignWords(expectedWordsNorm, spokenWords, exact) {
 // Gibt {isCorrect, similarity, wrongWordIndices, expectedWordsOriginal} zurück:
 // wrongWordIndices = Indizes ALLER abweichenden ERWARTETEN Wörter, in
 // Reihenfolge (für "Fehler korrigieren": alle vorsprechen + rot markieren).
+// ============================================================
+// ZAHLWÖRTER (Juli 2026, Bugfix)
+// Die Spracherkennung schreibt gesprochene Zahlen häufig als Ziffern
+// statt als Wort (z.B. "fünf" -> "5"), auch wenn wortwörtlich richtig
+// gesprochen wurde. Das führte zu falschen "Fehler"-Meldungen bei
+// Zeilen mit Zahlwörtern (z.B. "Fünf Minuten"). Fix: Zahlwörter UND
+// Ziffern werden vor dem Vergleich auf dieselbe Form (Ziffer) gebracht,
+// damit "fünf" und "5" als Treffer gelten.
+// ============================================================
+const GERMAN_NUMBER_WORDS = new Map();
+(function buildGermanNumberWords() {
+  const ones = ['null', 'eins', 'zwei', 'drei', 'vier', 'fünf', 'sechs', 'sieben', 'acht', 'neun'];
+  const teens = ['zehn', 'elf', 'zwölf', 'dreizehn', 'vierzehn', 'fünfzehn', 'sechzehn', 'siebzehn', 'achtzehn', 'neunzehn'];
+  const tens = { 20: 'zwanzig', 30: 'dreissig', 40: 'vierzig', 50: 'fünfzig', 60: 'sechzig', 70: 'siebzig', 80: 'achtzig', 90: 'neunzig' };
+
+  ones.forEach((w, n) => GERMAN_NUMBER_WORDS.set(w, n));
+  teens.forEach((w, i) => GERMAN_NUMBER_WORDS.set(w, i + 10));
+  GERMAN_NUMBER_WORDS.set('dreißig', 30); // deutsche Schreibweise zusätzlich zu "dreissig" (CH)
+  Object.entries(tens).forEach(([t, w]) => {
+    const tNum = Number(t);
+    GERMAN_NUMBER_WORDS.set(w, tNum);
+    for (let o = 1; o <= 9; o++) {
+      const onesWord = o === 1 ? 'ein' : ones[o];
+      GERMAN_NUMBER_WORDS.set(onesWord + 'und' + w, tNum + o);
+    }
+  });
+})();
+
+// "eins" bewusst NICHT als alleinstehendes "ein" gemappt, damit der
+// unbestimmte Artikel ("ein Buch") nicht fälschlich als Zahl behandelt wird.
+function canonicalizeNumberToken(word) {
+  if (/^\d+$/.test(word)) return word;
+  if (GERMAN_NUMBER_WORDS.has(word)) return String(GERMAN_NUMBER_WORDS.get(word));
+  return word;
+}
+
+// ============================================================
+// TOKENISIERUNG (Juli 2026, Bugfix)
+// Zeilen mit alleinstehenden Satzzeichen (Gedankenstrich "–", Ellipse "…"
+// usw., umgeben von Leerzeichen) wurden beim Normalisieren komplett
+// entfernt, beim Anzeigen/Vorsprechen aber als eigenes "Wort" mitgezählt.
+// Dadurch verschoben sich ab der Stelle alle Wort-Indizes um eins, und
+// die rote Markierung / das vorgesprochene Korrektur-Wort landete auf
+// dem FALSCHEN Wort (z.B. "in" statt "zwanzig" in "... ist in zwanzig
+// Minuten frei ..."). Fix: Normalisierung UND Original-Wörter werden
+// aus DENSELBEN Roh-Tokens gebaut, damit die Indizes immer zusammenpassen.
+// ============================================================
+// Bugfix Juli 2026 (Teil 2): Zusammengesetzte Wörter mit Bindestrich
+// MITTEN im Wort (z.B. "Mutter-Sohn-Beziehung", "so-genannt") wurden
+// bisher als EIN Vergleichs-Wort behandelt, obwohl beim Sprechen 2-3
+// einzelne Wörter erkannt werden ("Mutter", "Sohn", "Beziehung") - das
+// erzeugte eine künstliche Längen-Differenz und dadurch falsche Fehler.
+// Fix: jedes Roh-Token (durch Leerzeichen getrennt) kann beim Normalisieren
+// in mehrere Vergleichs-Wörter zerfallen; jedes davon "weiss" aber, zu
+// welchem Roh-Token (= sichtbares/vorlesbares Wort) es gehört.
+function tokenizeForCompare(text) {
+  const rawTokens = text.split(/\s+/).filter(Boolean);
+  const norm = [];        // Vergleichs-Wörter (0, 1 oder mehrere pro Roh-Token)
+  const rawIndexOf = [];  // rawIndexOf[normIndex] -> Index in rawTokens
+  rawTokens.forEach((t, idx) => {
+    const n = normalizeForCompare(t);
+    if (!n) return; // reines Satzzeichen (z.B. alleinstehendes "–") -> ganz weglassen
+    n.split(' ').filter(Boolean).forEach(sub => {
+      norm.push(sub);
+      rawIndexOf.push(idx);
+    });
+  });
+  return { norm, rawTokens, rawIndexOf };
+}
+
 function compareSpoken(spoken, expected) {
-  const spokenWords = normalizeForCompare(spoken).split(' ').filter(Boolean);
-  const expectedWordsNorm = normalizeForCompare(expected).split(' ').filter(Boolean);
-  const expectedWordsOriginal = expected.split(/\s+/).filter(Boolean);
+  const spokenWords = normalizeForCompare(spoken).split(' ').filter(Boolean).map(canonicalizeNumberToken);
+  const { norm: expectedWordsNormRaw, rawTokens: expectedRawTokens } = tokenizeForCompare(expected);
+  const expectedWordsNorm = expectedWordsNormRaw.map(canonicalizeNumberToken);
+  const expectedWordsOriginal = expectedRawTokens;
 
   // Fuzzy-Ausrichtung (Basis für Ähnlichkeitswert + "Ausgewogen"/"Locker")
   const fuzzy = alignWords(expectedWordsNorm, spokenWords, false);
@@ -2678,10 +2763,11 @@ function speakCorrections(words, i, gen, onDone) {
 // (Modus "Fehler korrigieren", Beta-Feedback #8 + Mehrfach-Update Juli 2026).
 function highlightWrongWord(chunkText, wrongWordIndices) {
   const indices = Array.isArray(wrongWordIndices) ? wrongWordIndices : [wrongWordIndices];
-  const words = chunkText.split(/\s+/).filter(Boolean);
-  const html = words.map((w, i) => {
+  const { rawTokens, rawIndexOf } = tokenizeForCompare(chunkText);
+  const highlightRawIndices = new Set(indices.map(i => rawIndexOf[i]).filter(v => v !== undefined));
+  const html = rawTokens.map((w, i) => {
     const safe = w.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
-    return indices.includes(i) ? '<span class="wrong-word">' + safe + '</span>' : safe;
+    return highlightRawIndices.has(i) ? '<span class="wrong-word">' + safe + '</span>' : safe;
   }).join(' ');
   document.getElementById('lineText').innerHTML = html;
 }
@@ -2731,9 +2817,20 @@ function handleSpokenResult(spoken, expectedEntry) {
 
   if (feedbackMode === 'correct') {
     // Alle richtigen Wörter nacheinander vorsprechen, dann von vorne beginnen.
+    // Bei zusammengesetzten Wörtern (z.B. "Mutter-Sohn-Beziehung") können
+    // mehrere Vergleichs-Indizes auf dasselbe Roh-Wort zeigen - hier auf
+    // eindeutige Wörter reduzieren, damit nichts doppelt vorgesprochen wird.
     const wrongIndices = result.wrongWordIndices || [];
-    const chunkWords = expectedEntry.text.split(/\s+/).filter(Boolean);
-    const correctionWords = wrongIndices.map(i => chunkWords[i]).filter(Boolean);
+    const { rawTokens: chunkRawTokens, rawIndexOf: chunkRawIndexOf } = tokenizeForCompare(expectedEntry.text);
+    const seenRawIndices = new Set();
+    const correctionWords = [];
+    wrongIndices.forEach(i => {
+      const rawIdx = chunkRawIndexOf[i];
+      if (rawIdx === undefined || seenRawIndices.has(rawIdx)) return;
+      seenRawIndices.add(rawIdx);
+      const word = chunkRawTokens[rawIdx];
+      if (word) correctionWords.push(word);
+    });
 
     if (ownTextRevealed && wrongIndices.length > 0) {
       highlightWrongWord(expectedEntry.text, wrongIndices);
