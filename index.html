@@ -994,6 +994,47 @@ const FEATURES = {
 const SPEECH_RATE = 1.2;
 
 // ============================================================
+// WAKE LOCK (Juli 2026)
+// Verhindert, dass der Bildschirm während der Skript-Analyse dunkel
+// wird. Grund: Wenn der Bildschirm ausgeht, drosselt/pausiert Android
+// den Browser-Tab, und die laufende Anfrage an /api/analyze bricht ab.
+// Die Analyse mehrseitiger Skripte kann mehrere Minuten dauern
+// (mehrere Chunks nacheinander), darum ist das hier besonders wichtig.
+// Wird stillschweigend ignoriert, falls der Browser das nicht unterstützt.
+// ============================================================
+let wakeLockSentinel = null;
+let analysisInProgress = false;
+
+async function acquireWakeLock() {
+  try {
+    if ('wakeLock' in navigator) {
+      wakeLockSentinel = await navigator.wakeLock.request('screen');
+    }
+  } catch (e) {
+    // z.B. nicht unterstützt oder Tab nicht sichtbar - einfach ohne Wake Lock weitermachen
+    console.warn('Wake Lock nicht verfügbar:', e);
+  }
+}
+
+async function releaseWakeLock() {
+  try {
+    if (wakeLockSentinel) {
+      await wakeLockSentinel.release();
+      wakeLockSentinel = null;
+    }
+  } catch (e) { /* ignorieren */ }
+}
+
+// Manche Browser geben den Wake Lock automatisch frei, sobald der Tab
+// kurz in den Hintergrund geht (z.B. App-Switcher antippen) - falls die
+// Analyse dann noch läuft, holen wir ihn uns beim Zurückkehren wieder.
+document.addEventListener('visibilitychange', async () => {
+  if (document.visibilityState === 'visible' && analysisInProgress) {
+    await acquireWakeLock();
+  }
+});
+
+// ============================================================
 // Supabase (Login mit Google) - "supabase" ist hier der globale
 // Name, den das CDN-Script mitbringt; wir nennen unsere Instanz
 // bewusst anders, um die Namen nicht zu verwechseln.
@@ -1803,6 +1844,8 @@ async function analyze() {
   btn.disabled = true;
   statusEl.className = 'status-line';
   statusEl.innerHTML = '<span class="spinner"></span>Lese PDF...';
+  analysisInProgress = true;
+  await acquireWakeLock();
 
   const setStatus = (msg) => {
     statusEl.innerHTML = '<span class="spinner"></span>' + msg;
@@ -1843,6 +1886,8 @@ async function analyze() {
     console.error(err);
   } finally {
     btn.disabled = false;
+    analysisInProgress = false;
+    await releaseWakeLock();
   }
 }
 
