@@ -2360,12 +2360,29 @@ function renderCurrentLine() {
     // chunkSize > 1: mehrere aufeinanderfolgende eigene Sätze zu einem Block sammeln
     const chunkText = buildChunk(entries, practiceIndex);
     document.getElementById('lineRole').textContent = entry.speaker + ' — DEINE ZEILE';
-    document.getElementById('lineText').textContent = showOwnText ? chunkText : '🎤 jetzt sprechen';
     ownTextRevealed = showOwnText;
     document.getElementById('playBtn').disabled = true;
     if (!showOwnText) document.getElementById('revealBtn').style.display = 'block';
-    // Virtuellen Entry mit zusammengefasstem Text fürs Mikrofon erstellen
+
+    // Bugfix Juli 2026: Mikrofon-Anlaufzeit. Chrome braucht nach
+    // recognition.start() eine kurze Anlaufphase, bevor tatsächlich
+    // Audio aufgenommen wird. Bisher wurde GLEICHZEITIG die eigene
+    // Zeile angezeigt / "🎤 jetzt sprechen" eingeblendet — wer die Zeile
+    // schon auswendig kennt (genau der Sinn von "Verinnerlichen"),
+    // spricht dann oft los, BEVOR das Mikrofon wirklich zuhört. Die
+    // ersten ein bis zwei Wörter fehlen dann komplett in der Erkennung
+    // und werden fälschlich als "falsch" markiert.
+    // Fix: Mikrofon SOFORT starten (damit die Anlaufzeit möglichst früh
+    // beginnt), den sichtbaren "los geht's"-Hinweis (Zeilentext /
+    // Mikro-Symbol) aber erst kurz danach zeigen.
+    const gen = practiceGeneration;
+    const MIC_WARMUP_MS = 350;
     startListening({ ...entry, text: chunkText });
+    document.getElementById('lineText').textContent = '🎤 Mikrofon wird bereit…';
+    setTimeout(() => {
+      if (gen !== practiceGeneration) return; // Nutzer hat inzwischen navigiert
+      document.getElementById('lineText').textContent = showOwnText ? chunkText : '🎤 jetzt sprechen';
+    }, MIC_WARMUP_MS);
   } else {
     // Fremd-Zeile: entweder automatisch vorlesen, oder auf Knopfdruck warten
     const { queue } = getReadAloudQueue(practiceIndex);
