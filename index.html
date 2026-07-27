@@ -476,6 +476,21 @@
   .feedback-pill.correct { background: rgba(22,224,214,0.16); color: var(--ok); }
   .feedback-pill.wrong { background: rgba(255,90,31,0.16); color: var(--err); }
 
+  /* Diagnose-Anzeige (Juli 2026): zeigt, was die Spracherkennung
+     tatsächlich verstanden hat, damit man Erkennungsfehler von echten
+     Aussprachefehlern unterscheiden kann - ohne Entwicklertools. */
+  .heard-text {
+    display: none;
+    margin: 8px auto 0;
+    padding: 0 12px;
+    font-size: 12px;
+    color: var(--paper-dim, #a09a8c);
+    text-align: center;
+    max-width: 480px;
+  }
+  .heard-text.show { display: block; }
+  .heard-text b { color: inherit; font-weight: 600; }
+
   .reveal-btn {
     display: none;
     margin: 14px auto 0;
@@ -864,6 +879,7 @@
         <div class="line-role" id="lineRole">—</div>
         <div class="line-text" id="lineText">Bereit zum Start</div>
         <div class="feedback-pill" id="feedbackPill"></div>
+        <div class="heard-text" id="heardText"></div>
         <button class="reveal-btn" id="revealBtn" onclick="revealOwnText()" style="display:none;">Text trotzdem zeigen</button>
       </div>
     </div>
@@ -2329,6 +2345,7 @@ function renderCurrentLine() {
   practiceGeneration++;
   stopListening();
   hideFeedback();
+  hideHeardText();
   document.getElementById('revealBtn').style.display = 'none';
 
   // Regieanweisungen überspringen:
@@ -2810,6 +2827,7 @@ function handleSpokenResult(spoken, expectedEntry) {
   if (result.isCorrect) {
     sessionStats.correct++;
     attemptCount = 0;
+    hideHeardText();
     showFeedback(true);
     setTimeout(() => {
       if (gen !== practiceGeneration) return;
@@ -2820,6 +2838,7 @@ function handleSpokenResult(spoken, expectedEntry) {
 
   sessionStats.wrong++;
   attemptCount++;
+  showHeardText(spoken);
 
   if (feedbackMode === 'silent') {
     advancePastChunk();
@@ -2901,6 +2920,21 @@ function showFeedback(isCorrect) {
 
 function hideFeedback() {
   document.getElementById('feedbackPill').className = 'feedback-pill';
+}
+
+// Diagnose-Anzeige (Juli 2026): zeigt den ROHEN, unbearbeiteten Text,
+// den die Spracherkennung geliefert hat - hilft zu unterscheiden, ob ein
+// "Fehler" ein echter Aussprachefehler ist oder die Spracherkennung
+// selbst etwas anderes verstanden hat (kommt vor, v.a. am Desktop).
+function showHeardText(spoken) {
+  const el = document.getElementById('heardText');
+  const safe = String(spoken || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  el.innerHTML = 'Erkannt: <b>„' + safe + '"</b>';
+  el.className = 'heard-text show';
+}
+
+function hideHeardText() {
+  document.getElementById('heardText').className = 'heard-text';
 }
 
 function showStuckOverlay() {
