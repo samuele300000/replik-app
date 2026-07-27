@@ -2741,11 +2741,39 @@ function tokenizeForCompare(text) {
   return { norm, rawTokens, rawIndexOf };
 }
 
+// ============================================================
+// VERSCHMOLZENE WÖRTER (Juli 2026, Bugfix Teil 3)
+// Chrome erkennt kurze, schnell hintereinander gesprochene Wörter
+// manchmal als EIN zusammengeklebtes Wort (z.B. "Drei Seiten" -> erkannt
+// als "dreiseiten"). Dadurch fehlt ein Wort komplett, und das andere
+// passt nicht mehr - beide werden fälschlich als falsch markiert.
+// Fix: Wenn ein erkanntes Wort exakt der Verkettung zweier
+// AUFEINANDERFOLGENDER erwarteter Wörter entspricht, wird es vor dem
+// Vergleich wieder in diese zwei Wörter aufgetrennt.
+function splitMergedSpokenWords(spokenWords, expectedWordsNorm) {
+  const result = [];
+  for (const w of spokenWords) {
+    let matched = false;
+    for (let i = 0; i < expectedWordsNorm.length - 1; i++) {
+      const a = expectedWordsNorm[i];
+      const b = expectedWordsNorm[i + 1];
+      if (a.length >= 2 && b.length >= 2 && (a + b) === w) {
+        result.push(a, b);
+        matched = true;
+        break;
+      }
+    }
+    if (!matched) result.push(w);
+  }
+  return result;
+}
+
 function compareSpoken(spoken, expected) {
-  const spokenWords = normalizeForCompare(spoken).split(' ').filter(Boolean).map(canonicalizeNumberToken);
+  let spokenWords = normalizeForCompare(spoken).split(' ').filter(Boolean).map(canonicalizeNumberToken);
   const { norm: expectedWordsNormRaw, rawTokens: expectedRawTokens } = tokenizeForCompare(expected);
   const expectedWordsNorm = expectedWordsNormRaw.map(canonicalizeNumberToken);
   const expectedWordsOriginal = expectedRawTokens;
+  spokenWords = splitMergedSpokenWords(spokenWords, expectedWordsNorm);
 
   // Fuzzy-Ausrichtung (Basis für Ähnlichkeitswert + "Ausgewogen"/"Locker")
   const fuzzy = alignWords(expectedWordsNorm, spokenWords, false);
