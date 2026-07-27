@@ -2769,11 +2769,18 @@ function splitMergedSpokenWords(spokenWords, expectedWordsNorm) {
 }
 
 function compareSpoken(spoken, expected) {
-  let spokenWords = normalizeForCompare(spoken).split(' ').filter(Boolean).map(canonicalizeNumberToken);
+  // Reihenfolge wichtig: erst Verschmelzungen auftrennen (auf den
+  // "rohen" normalisierten Wörtern, VOR der Zahlwort-Umwandlung), dann
+  // erst Zahlwörter kanonisieren. Sonst würde z.B. "drei" schon zu "3"
+  // werden, bevor die Prüfung "dreiseiten" = "drei"+"seiten" überhaupt
+  // stattfinden kann, und der Verschmelzungs-Fix würde nie greifen.
+  const spokenWordsRaw = normalizeForCompare(spoken).split(' ').filter(Boolean);
   const { norm: expectedWordsNormRaw, rawTokens: expectedRawTokens } = tokenizeForCompare(expected);
-  const expectedWordsNorm = expectedWordsNormRaw.map(canonicalizeNumberToken);
   const expectedWordsOriginal = expectedRawTokens;
-  spokenWords = splitMergedSpokenWords(spokenWords, expectedWordsNorm);
+  const spokenWordsSplit = splitMergedSpokenWords(spokenWordsRaw, expectedWordsNormRaw);
+
+  const spokenWords = spokenWordsSplit.map(canonicalizeNumberToken);
+  const expectedWordsNorm = expectedWordsNormRaw.map(canonicalizeNumberToken);
 
   // Fuzzy-Ausrichtung (Basis für Ähnlichkeitswert + "Ausgewogen"/"Locker")
   const fuzzy = alignWords(expectedWordsNorm, spokenWords, false);
